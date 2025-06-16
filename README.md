@@ -11,6 +11,13 @@ A Streamlit dashboard for visualizing and analyzing sleep data.
 
 2. Make sure your sleep data is in the `data` folder as `sleep-export.csv`.
 
+## Exporting raw data from SleepCloud, as recorded by Sleep as Android (manual method until API acccess is available)
+
+1. Export from mobile app to Google Drive (it doesn't seem possible to export from SleepCloud website)
+   Google Drive folder (manual backups): 
+   https://drive.google.com/drive/u/0/folders/15kBAnQDMFdSud2WRF5VwtgCzKd1Jo6gA
+2. Import from Google Drive to this app's "data" folder
+
 ## Running the Dashboard
 
 To run the dashboard, execute:
