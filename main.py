@@ -7,6 +7,10 @@ import numpy as np
 import csv
 import re
 import logging
+import os
+import glob
+from pathlib import Path
+import pytz
 
 # Configure page settings to keep header menu visible
 st.set_page_config(
@@ -35,14 +39,162 @@ st.markdown("""
 # Title
 st.title("😴 Sleep Data Dashboard")
 
+# Helper function to find the latest data file
+def find_latest_data_file():
+    """
+    Find the latest 2025-only data file in the data folder based on naming convention.
+    New format: YYYYMMDD_sleep-export[_2025only].csv
+    Returns the path to the most recent file.
+    """
+    data_folder = Path("data")
+    
+    # Look for 2025-only files first (these are smaller and optimized)
+    # New format: YYYYMMDD_sleep-export_2025only.csv
+    pattern_2025_new = "*_sleep-export_2025only.csv"
+    files_2025_new = list(data_folder.glob(pattern_2025_new))
+    
+    if files_2025_new:
+        # Sort by date in filename (newest first) - extract YYYYMMDD from start of filename
+        latest_file = max(files_2025_new, key=lambda x: x.name[:8])
+        return str(latest_file)
+    
+    # Fallback to new format full dataset files
+    # New format: YYYYMMDD_sleep-export.csv
+    pattern_full_new = "*_sleep-export.csv"
+    files_full_new = list(data_folder.glob(pattern_full_new))
+    
+    if files_full_new:
+        # Filter out 2025only files (already checked above) and sort by date
+        files_full_new = [f for f in files_full_new if "2025only" not in f.name]
+        if files_full_new:
+            latest_file = max(files_full_new, key=lambda x: x.name[:8])
+            return str(latest_file)
+    
+    # Legacy format fallbacks (old naming convention)
+    pattern_2025_old = "sleep-export_2025only_*.csv"
+    files_2025_old = list(data_folder.glob(pattern_2025_old))
+    
+    if files_2025_old:
+        latest_file = max(files_2025_old, key=lambda x: x.stat().st_mtime)
+        return str(latest_file)
+    
+    pattern_full_old = "sleep-export_*.csv"
+    files_full_old = list(data_folder.glob(pattern_full_old))
+    
+    if files_full_old:
+        files_full_old = [f for f in files_full_old if "2025only" not in f.name]
+        if files_full_old:
+            latest_file = max(files_full_old, key=lambda x: x.stat().st_mtime)
+            return str(latest_file)
+    
+    # Final fallback to old structure
+    legacy_file = data_folder / "sleep-export.csv"
+    if legacy_file.exists():
+        return str(legacy_file)
+    
+    return None
+
+def process_timezone_aware_dates(df, target_timezone='America/Chicago'):
+    """
+    Process date columns to be timezone-aware, converting all times to a target timezone.
+    
+    Args:
+        df: DataFrame with 'Tz' column and date columns
+        target_timezone: Target timezone to convert all dates to (default: 'America/Chicago')
+    
+    Returns:
+        DataFrame with timezone-aware and converted date columns
+    """
+    if 'Tz' not in df.columns:
+        st.warning("⚠️ No timezone information found in data. Times will be treated as naive datetimes.")
+        return df
+    
+    date_columns = ['From', 'To', 'Sched']
+    df_processed = df.copy()
+    
+    # Get the target timezone object
+    try:
+        target_tz = pytz.timezone(target_timezone)
+    except Exception as e:
+        st.warning(f"⚠️ Invalid target timezone '{target_timezone}'. Using UTC instead.")
+        target_tz = pytz.UTC
+        target_timezone = 'UTC'
+    
+    successful_conversions = 0
+    total_conversions = 0
+    
+    for date_col in date_columns:
+        if date_col in df_processed.columns:
+            # Process each row's date with its corresponding timezone
+            converted_dates = []
+            
+            for idx, row in df_processed.iterrows():
+                total_conversions += 1
+                try:
+                    if pd.isna(row[date_col]) or pd.isna(row['Tz']):
+                        converted_dates.append(row[date_col])
+                        continue
+                    
+                    # Get the source timezone
+                    source_tz_str = row['Tz']
+                    source_tz = pytz.timezone(source_tz_str)
+                    
+                    # If the datetime is naive, localize it to the source timezone
+                    dt = row[date_col]
+                    if dt.tz is None:
+                        # Localize to source timezone
+                        dt_localized = source_tz.localize(dt)
+                    else:
+                        # Already timezone-aware, convert to source timezone if needed
+                        dt_localized = dt.astimezone(source_tz)
+                    
+                    # Convert to target timezone
+                    dt_converted = dt_localized.astimezone(target_tz)
+                    converted_dates.append(dt_converted)
+                    successful_conversions += 1
+                    
+                except Exception as e:
+                    # If conversion fails, keep original value
+                    converted_dates.append(row[date_col])
+                    continue
+            
+            # Update the column with converted dates
+            df_processed[date_col] = converted_dates
+    
+    # Log conversion statistics
+    if total_conversions > 0:
+        success_rate = (successful_conversions / total_conversions) * 100
+        st.info(f"🌍 **Timezone Processing Complete**\n"
+               f"- Converted {successful_conversions}/{total_conversions} timestamps ({success_rate:.1f}% success rate)\n"
+               f"- All times now displayed in **{target_timezone}**\n"
+               f"- Original timezones preserved in 'Tz' column for reference")
+    
+    return df_processed
+
 # Load data
 @st.cache_data
 def load_data(uploaded_file=None):
     # Determine data source
-    data_source = uploaded_file if uploaded_file is not None else 'data/sleep-export.csv'
-    source_desc = "uploaded file" if uploaded_file is not None else "default file"
+    if uploaded_file is not None:
+        data_source = uploaded_file
+        source_desc = "uploaded file"
+    else:
+        data_source = find_latest_data_file()
+        if data_source is None:
+            st.error("❌ No sleep data files found in the data folder!")
+            st.write("Expected file patterns:")
+            st.write("- `YYYYMMDD_sleep-export_2025only.csv` (preferred)")
+            st.write("- `YYYYMMDD_sleep-export.csv` (full dataset)")
+            st.write("- `sleep-export_2025only_YYYYMMDD.csv` (legacy)")
+            st.write("- `sleep-export.csv` (legacy)")
+            return pd.DataFrame()
+        
+        source_desc = f"latest data file: {Path(data_source).name}"
     
     try:
+        # Show which file we're loading
+        st.info(f"📊 Loading data from {source_desc}")
+        
         # Try loading with specific columns as we now know the format
         df = pd.read_csv(data_source, 
                         on_bad_lines='skip',
@@ -69,6 +221,10 @@ def load_data(uploaded_file=None):
         except Exception as e:
             st.warning(f"Error parsing date columns: {e}")
         
+        # Process timezone-aware dates BEFORE filtering and numeric processing
+        target_tz = st.session_state.get('target_timezone', 'America/Chicago')
+        df = process_timezone_aware_dates(df, target_tz)
+        
         # Handle numeric columns
         numeric_cols = ['Hours', 'Rating', 'Snore', 'Noise', 'Cycles', 'DeepSleep', 'LenAdjust']
         for col in numeric_cols:
@@ -79,6 +235,15 @@ def load_data(uploaded_file=None):
         if 'Hours' in df.columns:
             df = df[df['Hours'] > 0]
         
+        # If this is not already a 2025-only file, filter for 2025 data
+        if 'From' in df.columns and pd.api.types.is_datetime64_any_dtype(df['From']):
+            year_2025_count = len(df[df['From'].dt.year == 2025])
+            total_count = len(df)
+            
+            if year_2025_count < total_count:
+                st.info(f"📅 Filtering to 2025 data: {year_2025_count} records out of {total_count} total")
+                df = df[df['From'].dt.year == 2025].copy()
+        
         # Get event data - These are the columns with Event headers
         event_cols = [col for col in df.columns if 'Event' in str(col)]
         
@@ -87,13 +252,18 @@ def load_data(uploaded_file=None):
         movement_cols = [col for col in df.columns if pd.api.types.is_string_dtype(df[col]) and 
                          isinstance(col, str) and re.match(time_pattern, col)]
         
-        # Suppress this message in UI but log to console
-        print(f"Found {len(movement_cols)} movement data columns and {len(event_cols)} event columns")
+        # Log information about the data structure
+        print(f"✅ Successfully loaded {len(df)} sleep records")
+        print(f"📊 Found {len(movement_cols)} movement data columns and {len(event_cols)} event columns")
         
         return df
         
     except Exception as e:
-        st.error(f"Error processing data: {e}")
+        st.error(f"❌ Error processing data: {e}")
+        st.write("**Troubleshooting tips:**")
+        st.write("1. Check that the file is not corrupted")
+        st.write("2. Ensure the file follows the expected CSV format")
+        st.write("3. Try uploading the file manually using the sidebar")
         return pd.DataFrame()
 
 # Load the data
@@ -101,47 +271,44 @@ try:
     # Check if we have an uploaded file in session state
     uploaded_file = st.session_state.get('uploaded_file', None)
     
+    # Set default timezone for processing
+    if 'target_timezone' not in st.session_state:
+        st.session_state.target_timezone = 'America/Chicago'
+    
     df = load_data(uploaded_file)
     
-    # Suppress this message in UI
-    # st.success("Sleep data loaded successfully!")
-    
-    # Show data overview but collapsed by default
-    with st.expander("Data Overview", expanded=False):
-        st.write(f"Total records: {len(df)}")
-        st.dataframe(df.head())
-        st.write("Data columns:")
-        st.write(df.columns.tolist())
-        
-        # Data summary
-        st.write("Data summary:")
-        st.write(df.describe())
-        
-        # Add CSV structure debugging info
-        st.subheader("CSV Structure Analysis")
-        try:
-            with open('data/sleep-export.csv', 'r') as f:
-                sample_lines = [next(f) for _ in range(10)]
-                
-            line_counts = []
-            for i, line in enumerate(sample_lines):
-                if i == 0:  # Header line
-                    continue
-                fields = line.split(',')
-                line_counts.append(len(fields))
+    if len(df) > 0:
+        # Show data overview but collapsed by default
+        with st.expander("📋 Data Overview", expanded=False):
+            st.write(f"**Total records:** {len(df)}")
             
-            st.write("Field counts in first 10 lines:")
-            st.write(line_counts)
+            # Show date range
+            if 'From' in df.columns and pd.api.types.is_datetime64_any_dtype(df['From']):
+                date_range = f"{df['From'].min().strftime('%Y-%m-%d')} to {df['From'].max().strftime('%Y-%m-%d')}"
+                st.write(f"**Date range:** {date_range}")
             
-            if len(set(line_counts)) > 1:
-                st.warning("⚠️ Inconsistent field counts detected in the CSV file. This may indicate formatting issues.")
-                
-            if min(line_counts) < max(line_counts):
-                st.info(f"Line with fewest fields has {min(line_counts)} fields.")
-                st.info(f"Line with most fields has {max(line_counts)} fields.")
-        except Exception as e:
-            st.error(f"Error analyzing CSV structure: {e}")
+            st.dataframe(df.head())
+            st.write("**Data columns:**")
+            st.write(df.columns.tolist())
+            
+            # Data summary
+            st.write("**Data summary:**")
+            st.write(df.describe())
+            
+            # Show file information
+            if not uploaded_file:
+                data_file = find_latest_data_file()
+                if data_file:
+                    file_info = Path(data_file)
+                    file_size = file_info.stat().st_size / (1024 * 1024)  # MB
+                    mod_time = datetime.fromtimestamp(file_info.stat().st_mtime)
+                    st.write(f"**Source file:** {file_info.name}")
+                    st.write(f"**File size:** {file_size:.1f} MB")
+                    st.write(f"**Last modified:** {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
     
+    if len(df) == 0:
+        st.stop()  # Stop execution if no data loaded
+        
     # Create dashboard layout with tabs
     tab1, tab2, tab3, tab4 = st.tabs(["Sleep Duration", "Sleep Quality", "Sleep Patterns", "Troubleshooting"])
     
@@ -156,7 +323,7 @@ try:
                 # Create a separate dataframe for plotting to avoid any PyArrow conversion issues
                 plot_df = df[['From', 'Hours']].copy()
                 
-                # Filter for 2025 data only
+                # Filter for 2025 data only (should already be filtered but double-check)
                 if pd.api.types.is_datetime64_any_dtype(plot_df['From']):
                     plot_df = plot_df[plot_df['From'].dt.year == 2025].copy()
                     
@@ -555,23 +722,52 @@ except Exception as e:
 
 # Sidebar for filters and settings
 with st.sidebar:
-    st.header("Data Source")
+    st.header("📁 Data Source")
+    
+    # Show current data source
+    current_file = find_latest_data_file()
+    if current_file and 'uploaded_file' not in st.session_state:
+        file_name = Path(current_file).name
+        st.success(f"🎯 **Auto-selected:** {file_name}")
+        
+        # Show available files
+        data_folder = Path("data")
+        available_files = list(data_folder.glob("sleep-export*.csv"))
+        if len(available_files) > 1:
+            st.write("**Available data files:**")
+            for file in sorted(available_files, key=lambda x: x.stat().st_mtime, reverse=True):
+                is_current = str(file) == current_file
+                icon = "🎯" if is_current else "📄"
+                size_mb = file.stat().st_size / (1024 * 1024)
+                mod_time = datetime.fromtimestamp(file.stat().st_mtime).strftime('%m/%d')
+                st.write(f"{icon} {file.name} ({size_mb:.1f}MB, {mod_time})")
     
     # Add file uploader for alternative CSV files
-    st.write("Having trouble with the default data file? Upload a corrected CSV:")
-    uploaded_file = st.file_uploader("Upload sleep data CSV", type="csv")
+    st.write("**Upload different file:**")
+    uploaded_file = st.file_uploader("Choose sleep data CSV", type="csv", key="file_uploader")
     
     if uploaded_file is not None:
-        st.success("✅ File uploaded successfully")
+        st.success("✅ Using uploaded file")
         st.session_state['uploaded_file'] = uploaded_file
         st.rerun()  # Rerun the app to use the uploaded file
+    elif 'uploaded_file' in st.session_state:
+        if st.button("🔄 Switch back to auto-selected file"):
+            del st.session_state['uploaded_file']
+            st.rerun()
     
     st.markdown("---")
-    st.header("Filters and Settings")
-    st.write("Filter your sleep data by date range:")
+    st.header("⚙️ Settings")
+    
+    # Show data refresh options
+    if st.button("🔄 Refresh Data"):
+        st.cache_data.clear()
+        st.rerun()
     
     try:
-        if 'df' in locals():
+        if 'df' in locals() and len(df) > 0:
+            st.markdown("### 📊 Data Info")
+            st.write(f"**Records:** {len(df):,}")
+            
             # Find date columns
             date_cols = [col for col in df.columns if pd.api.types.is_datetime64_any_dtype(df[col])]
             
@@ -579,19 +775,73 @@ with st.sidebar:
                 main_date_col = date_cols[0]
                 min_date = df[main_date_col].min().date()
                 max_date = df[main_date_col].max().date()
+                total_days = (max_date - min_date).days + 1
                 
-                date_range = st.date_input(
-                    "Select date range",
-                    value=(min_date, max_date),
-                    min_value=min_date,
-                    max_value=max_date
-                )
+                st.write(f"**Date range:** {min_date} to {max_date}")
+                st.write(f"**Total days:** {total_days}")
+                st.write(f"**Tracking rate:** {len(df)/total_days:.1%}")
                 
-                st.write("Additional filters will be added based on your data structure.")
     except:
-        st.write("Date filters will be available after data is loaded correctly.")
+        st.write("Data info will appear after successful load.")
     
     st.markdown("---")
-    st.markdown("### About")
-    st.markdown("This dashboard visualizes your sleep data to help you understand your sleep patterns and quality.")
-    st.markdown("Data source: sleep-export.csv")
+    st.markdown("### 🌍 Timezone Settings")
+    
+    # Common timezone options
+    common_timezones = [
+        'America/Chicago',
+        'America/New_York', 
+        'America/Los_Angeles',
+        'America/Denver',
+        'America/Phoenix',
+        'UTC',
+        'Europe/London',
+        'Europe/Paris',
+        'Asia/Tokyo',
+        'Australia/Sydney'
+    ]
+    
+    # Check if data has timezone info
+    if 'df' in locals() and len(df) > 0 and 'Tz' in df.columns:
+        # Show current timezone distribution
+        unique_timezones = df['Tz'].value_counts()
+        if len(unique_timezones) > 0:
+            st.write("**Timezones in your data:**")
+            for tz, count in unique_timezones.head(3).items():
+                st.write(f"• {tz}: {count} records")
+        
+        # Let user select target timezone
+        current_tz = st.session_state.get('target_timezone', 'America/Chicago')
+        try:
+            current_index = common_timezones.index(current_tz)
+        except ValueError:
+            current_index = 0
+            
+        target_timezone = st.selectbox(
+            "Display times in timezone:",
+            options=common_timezones,
+            index=current_index,
+            help="All times will be converted to this timezone for analysis"
+        )
+        
+        # Update session state if timezone changed
+        if target_timezone != st.session_state.get('target_timezone'):
+            st.session_state.target_timezone = target_timezone
+            st.cache_data.clear()  # Clear cache to force reload with new timezone
+            st.rerun()
+        
+        # Note about timezone processing
+        st.info(f"🔄 All times displayed in **{target_timezone}**")
+        
+    else:
+        st.write("⚠️ No timezone data found")
+        st.write("Times will be treated as naive datetimes")
+    
+    st.markdown("---")
+    st.markdown("### ℹ️ About")
+    st.markdown("This dashboard analyzes your 2025 sleep data from Sleep as Android exports.")
+    st.markdown("**Features:**")
+    st.markdown("- 📊 Sleep duration tracking")
+    st.markdown("- 🎯 Sleep quality metrics")  
+    st.markdown("- 📅 Sleep pattern analysis")
+    st.markdown("- 🔧 Data troubleshooting tools")
