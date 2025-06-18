@@ -161,12 +161,14 @@ def process_timezone_aware_dates(df, target_timezone='America/Chicago'):
             # Update the column with converted dates
             df_processed[date_col] = converted_dates
     
-    # Log conversion statistics
+    # Store conversion statistics for notifications tab
     if total_conversions > 0:
         success_rate = (successful_conversions / total_conversions) * 100
-        st.info(f"🌍 **Timezone Processing Complete**\n"
+        if 'notifications' not in st.session_state:
+            st.session_state.notifications = []
+        st.session_state.notifications.append(f"🌍 Timezone Processing Complete\n"
                f"- Converted {successful_conversions}/{total_conversions} timestamps ({success_rate:.1f}% success rate)\n"
-               f"- All times now displayed in **{target_timezone}**\n"
+               f"- All times now displayed in {target_timezone}\n"
                f"- Original timezones preserved in 'Tz' column for reference")
     
     return df_processed
@@ -192,8 +194,10 @@ def load_data(uploaded_file=None):
         source_desc = f"latest data file: {Path(data_source).name}"
     
     try:
-        # Show which file we're loading
-        st.info(f"📊 Loading data from {source_desc}")
+        # Store loading notification for notifications tab
+        if 'notifications' not in st.session_state:
+            st.session_state.notifications = []
+        st.session_state.notifications.append(f"📊 Loading data from {source_desc}")
         
         # Try loading with specific columns as we now know the format
         df = pd.read_csv(data_source, 
@@ -241,7 +245,7 @@ def load_data(uploaded_file=None):
             total_count = len(df)
             
             if year_2025_count < total_count:
-                st.info(f"📅 Filtering to 2025 data: {year_2025_count} records out of {total_count} total")
+                st.session_state.notifications.append(f"📅 Filtering to 2025 data: {year_2025_count} records out of {total_count} total")
                 df = df[df['From'].dt.year == 2025].copy()
         
         # Get event data - These are the columns with Event headers
@@ -310,18 +314,17 @@ try:
         st.stop()  # Stop execution if no data loaded
         
     # Create dashboard layout with tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["Sleep Duration", "Sleep Quality", "Sleep Patterns", "Troubleshooting"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Sleep Duration", "Sleep Quality", "Sleep Patterns", "Notifications", "Troubleshooting"])
     
     with tab1:
         st.header("Sleep Duration Analysis")
-        st.info("This section analyzes how much you sleep and how it changes over time.")
         
         try:
             if 'From' not in df.columns or 'Hours' not in df.columns:
                 st.error("Could not find required columns for sleep duration analysis")
             else:
                 # Create a separate dataframe for plotting to avoid any PyArrow conversion issues
-                plot_df = df[['From', 'Hours']].copy()
+                plot_df = df[['From', 'To', 'Hours']].copy()
                 
                 # Filter for 2025 data only (should already be filtered but double-check)
                 if pd.api.types.is_datetime64_any_dtype(plot_df['From']):
@@ -331,12 +334,37 @@ try:
                     plot_df = plot_df[plot_df['Hours'] > 0].copy()
                     
                     if len(plot_df) > 0:
-                        # Add a date-only column for aggregation
-                        plot_df['Date'] = plot_df['From'].dt.date
+                        # Add a date-only column for aggregation using intelligent date assignment
+                        def assign_sleep_date(row):
+                            start_date = row['From'].date()
+                            end_date = row['To'].date()
+                            
+                            # If sleep spans midnight (end date != start date), 
+                            # assign to the wake-up date (when the sleep "completes")
+                            if end_date != start_date:
+                                return end_date
+                            else:
+                                return start_date
                         
-                        # Create an aggregated dataframe that sums all sleep periods per day
+                        plot_df['Date'] = plot_df.apply(assign_sleep_date, axis=1)
+                        
+                        # Sum all sleep periods per day (includes naps, multiple sessions)
                         daily_sleep = plot_df.groupby('Date')['Hours'].sum().reset_index()
                         daily_sleep['Date'] = pd.to_datetime(daily_sleep['Date'])
+                        
+                        # Store aggregation info for notifications tab
+                        total_records = len(plot_df)
+                        unique_dates = len(daily_sleep)
+                        multi_session_days = total_records - unique_dates
+                        cross_midnight_count = len(plot_df[plot_df['From'].dt.date != plot_df['To'].dt.date])
+                        
+                        # Store processing info in session state for notifications tab
+                        st.session_state.processing_info = {
+                            'total_records': total_records,
+                            'unique_dates': unique_dates,
+                            'multi_session_days': multi_session_days,
+                            'cross_midnight_count': cross_midnight_count
+                        }
                         
                         # Timeline Analysis
                         st.subheader("Sleep Duration Over Time")
@@ -437,20 +465,41 @@ try:
                             st.metric("Range", f"{sleep_range:.1f} hours")
                             
                         with col4:
-                            multi_sleep_days = len(plot_df) - len(daily_sleep)
-                            st.metric("Days with Multiple Sleep Periods", f"{multi_sleep_days}")
+                            st.metric("Days with Multiple Sleep Periods", f"{multi_session_days}")
                             
-                        # Optionally show more details about multiple sleep days
-                        if multi_sleep_days > 0:
+                        # Show details about multiple sleep days with better explanation
+                        if multi_session_days > 0:
                             # Count number of records per day
                             sleep_count = plot_df.groupby('Date').size().reset_index(name='Count')
                             # Filter to days with multiple records
                             multi_days = sleep_count[sleep_count['Count'] > 1]
                             
                             if st.checkbox("Show details of days with multiple sleep records"):
-                                st.write("Days with multiple sleep records:")
-                                details = plot_df[plot_df['Date'].isin(multi_days['Date'])].sort_values(['Date', 'From'])
-                                st.dataframe(details[['Date', 'From', 'Hours']])
+                                st.write("**Days with multiple sleep records** (showing longest session used):")
+                                details = plot_df[plot_df['Date'].isin(multi_days['Date'])].sort_values(['Date', 'Hours'], ascending=[True, False])
+                                
+                                # Add a column to mark which session was selected
+                                details['Used'] = False
+                                for date in multi_days['Date']:
+                                    date_records = details[details['Date'] == date]
+                                    if len(date_records) > 0:
+                                        details.loc[date_records.index[0], 'Used'] = True
+                                
+                                # Display with formatting
+                                display_details = details[['Date', 'From', 'Hours', 'Used']].copy()
+                                display_details['From'] = display_details['From'].dt.strftime('%H:%M')
+                                st.dataframe(
+                                    display_details,
+                                    column_config={
+                                        "Date": "Date",
+                                        "From": "Start Time", 
+                                        "Hours": st.column_config.NumberColumn("Sleep Hours", format="%.2f"),
+                                        "Used": st.column_config.CheckboxColumn("Used for Daily Total")
+                                    }
+                                )
+                                
+                                st.markdown("**Note**: All sleep sessions for a given day are **summed** to calculate that day's total sleep. "
+                                          "This includes the main overnight sleep plus any naps, interruptions, or split-sleep sessions.")
                     else:
                         st.warning("No sleep data found for 2025. Please check your date format.")
                 else:
@@ -460,7 +509,6 @@ try:
     
     with tab2:
         st.header("Sleep Quality Metrics")
-        st.info("This section shows metrics related to your sleep quality.")
         
         try:
             # For this data format, we have several quality metrics
@@ -533,7 +581,6 @@ try:
     
     with tab3:
         st.header("Sleep Patterns")
-        st.info("This section analyzes your sleep patterns and schedules.")
         
         try:
             if 'From' in df.columns and 'To' in df.columns:
@@ -668,6 +715,32 @@ try:
             st.write("Please check the data format and column names.")
 
     with tab4:
+        st.header("Notifications")
+        
+        try:
+            # Display stored notifications
+            if 'notifications' in st.session_state and st.session_state.notifications:
+                st.subheader("Data Loading & Processing")
+                for notification in st.session_state.notifications:
+                    st.info(notification)
+            
+            # Display processing info
+            if 'processing_info' in st.session_state:
+                processing_info = st.session_state.processing_info
+                st.subheader("Sleep Data Processing")
+                st.info(f"📊 Sleep Data Processing: Summing all sleep periods per day\n"
+                        f"- Total sleep records: {processing_info['total_records']}\n"
+                        f"- Unique days: {processing_info['unique_dates']}\n"
+                        f"- Days with multiple sessions: {processing_info['multi_session_days']}\n"
+                        f"- Sleep periods crossing midnight: {processing_info['cross_midnight_count']}")
+            
+            if not ('notifications' in st.session_state and st.session_state.notifications) and not ('processing_info' in st.session_state):
+                st.info("No notifications available. Please load data first.")
+                
+        except Exception as e:
+            st.error(f"Error displaying notifications: {e}")
+
+    with tab5:
         st.header("CSV Troubleshooting")
         st.info("If you're having problems loading your sleep data, try these steps:")
         

@@ -85,7 +85,7 @@ The app will eventually support:
 ### 📅 Sleep Pattern Analysis
 - **Bedtime/Wake Time Distribution**: When you typically go to bed and wake up
 - **Schedule Consistency**: Day-to-day variation in sleep timing
-- **Sleep Phase Detection**: Analysis of light, deep, and REM sleep phases
+- **Sleep Phase Detection (experimental)**: Limited preview that lists phase events if present; full analysis planned
 - **Pattern Recognition**: Identify trends in your sleep schedule
 
 ### 🌍 Timezone Support
@@ -101,6 +101,55 @@ The app will eventually support:
 - **Error Diagnostics**: Clear error messages and solution suggestions
 
 ## 🛠️ Technical Details
+
+### Sleep Record Aggregation Logic
+
+The dashboard uses intelligent date assignment to prevent double-counting of sleep periods across dates:
+
+#### **Date Assignment Rules**
+1. **Sleep within same day** (e.g., nap from 2:00 PM to 4:00 PM on June 15)
+   - → Assigned to **June 15** (start date)
+
+2. **Sleep crossing midnight** (e.g., sleep from June 15 11:30 PM to June 16 7:00 AM)
+   - → Assigned to **June 16** (wake-up date)
+
+#### **Why This Logic?**
+This prevents double-counting issues that could occur with naive start-date assignment:
+
+**Problem Scenario (if using start date only):**
+- Sleep 1: June 15 11:30 PM → June 16 7:00 AM = assigned to June 15
+- Sleep 2: June 16 10:00 PM → June 17 6:00 AM = assigned to June 16  
+- Sleep 3: June 16 11:45 PM → June 17 7:30 AM = assigned to June 16
+
+This would incorrectly show multiple full night's sleep on June 16.
+
+**Current Solution:**
+```python
+def assign_sleep_date(row):
+    start_date = row['From'].date()
+    end_date = row['To'].date()
+    
+    # If sleep spans midnight, assign to wake-up date
+    if end_date != start_date:
+        return end_date
+    else:
+        return start_date
+```
+
+#### **Daily Aggregation**
+- All sleep periods assigned to the same date are **summed together**
+- This includes: main sleep + naps + brief interruptions
+- Each sleep period is counted exactly once
+- Result: Total sleep hours per calendar day
+
+#### **Multiple Sleep Sessions**
+The dashboard properly handles:
+- **Naps during the day**
+- **Split sleep schedules** (e.g., biphasic sleep)
+- **Brief interruptions** (when tracking restarts)
+- **Tracking errors** (very short sessions)
+
+All sessions for a given date are summed to show total daily sleep.
 
 ### Data Processing
 - **Smart File Detection**: Automatically finds the latest data file
