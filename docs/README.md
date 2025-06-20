@@ -100,6 +100,11 @@ The app will eventually support:
 - **Format Guidance**: Instructions for preparing data files
 - **Error Diagnostics**: Clear error messages and solution suggestions
 
+### 📢 Notification System
+- **Centralized Notifications**: All system messages, warnings, and processing updates are contained within the "Notifications" tab for a clean, uncluttered main interface
+- **Processing Updates**: Data loading progress, timezone conversion status, and data validation results
+- **No Home Page Clutter**: The main dashboard remains focused on analysis and visualization
+
 ## 🛠️ Technical Details
 
 ### Sleep Record Aggregation Logic

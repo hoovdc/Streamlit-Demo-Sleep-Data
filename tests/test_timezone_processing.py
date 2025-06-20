@@ -4,11 +4,15 @@ Test script for timezone processing functionality
 """
 
 import sys
-sys.path.append('..')  # Add parent directory to path
+from pathlib import Path
+
+# Add the parent directory to sys.path to enable imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
 import pytz
 from datetime import datetime
+import numpy as np
 
 def test_timezone_processing():
     """Test the timezone processing function with sample data"""
@@ -37,7 +41,7 @@ def test_timezone_processing():
     
     # Import the timezone processing function
     try:
-        from main import process_timezone_aware_dates
+        from src.data_loader import process_timezone_aware_dates
         
         # Test conversion to Chicago time
         print("Testing conversion to America/Chicago:")

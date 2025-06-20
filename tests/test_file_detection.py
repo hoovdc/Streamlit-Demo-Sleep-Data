@@ -13,7 +13,7 @@ def find_latest_data_file():
     New format: YYYYMMDD_sleep-export[_2025only].csv
     Returns the path to the most recent file.
     """
-    data_folder = Path("../data")
+    data_folder = Path("data")
     
     # Look for 2025-only files first (these are smaller and optimized)
     # New format: YYYYMMDD_sleep-export_2025only.csv
@@ -66,7 +66,7 @@ def test_file_detection():
     
     # List all CSV files in data folder
     print("\n1. Available files in data folder:")
-    data_folder = Path("../data")
+    data_folder = Path("data")
     for file in sorted(data_folder.glob("*.csv")):
         print(f"   - {file.name}")
     
