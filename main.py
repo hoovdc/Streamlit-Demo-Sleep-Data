@@ -82,7 +82,8 @@ try:
                                         labels={'Hours': 'Total Sleep Hours', 'count': 'Frequency'})
                     fig2.update_layout(
                         bargap=0.2,
-                        xaxis=dict(tickmode='linear', tick0=0, dtick=0.5, tickformat='.1f')
+                        xaxis=dict(tickmode='linear', tick0=0, dtick=0.5, tickformat='.1f'),
+                        margin=dict(t=40, b=40, l=40, r=40)
                     )
                     st.plotly_chart(fig2, use_container_width=True)
 
@@ -110,7 +111,7 @@ try:
                     with col_quality2:
                         multi_session_days = processing_info.get('multi_session_days', 0)
                         if multi_session_days > 0:
-                            with st.expander(f"View details for {multi_session_days} days with multiple sessions"):
+                            with st.expander(f"Multiple sessions: {multi_session_days} days"):
                                 # Count number of records per day
                                 sleep_count = plot_df.groupby('Date').size().reset_index(name='Count')
                                 # Filter to days with multiple records
@@ -159,7 +160,8 @@ try:
                     fig_bedtime.update_layout(
                         xaxis_title="Hour of Day (e.g., 23.5 = 11:30 PM)", 
                         yaxis_title="Frequency",
-                        xaxis=dict(tickmode='linear', tick0=0, dtick=1)
+                        xaxis=dict(tickmode='linear', tick0=0, dtick=1),
+                        margin=dict(t=40, b=40, l=40, r=40)
                     )
                     
                     # Add hour labels - simpler approach
@@ -173,7 +175,8 @@ try:
                     fig_wake_time.update_layout(
                         xaxis_title="Hour of Day (e.g., 7.5 = 7:30 AM)", 
                         yaxis_title="Frequency",
-                        xaxis=dict(tickmode='linear', tick0=0, dtick=1)
+                        xaxis=dict(tickmode='linear', tick0=0, dtick=1),
+                        margin=dict(t=40, b=40, l=40, r=40)
                     )
                     
                     # Add hour labels - simpler approach
@@ -182,11 +185,12 @@ try:
                     st.plotly_chart(fig_wake_time, use_container_width=True)
 
                 # Sleep Schedule Consistency
-                bedtime_std = patterns_df['bedtime'].std()
-                st.metric("Bedtime Standard Deviation", f"{bedtime_std:.2f} hours")
-                st.info("A lower standard deviation indicates a more consistent sleep schedule.")
-                
-                st.markdown("---")
+                col_consistency1, col_consistency2 = st.columns([1, 2])
+                with col_consistency1:
+                    bedtime_std = patterns_df['bedtime'].std()
+                    st.metric("Bedtime Standard Deviation", f"{bedtime_std:.2f} hours")
+                with col_consistency2:
+                    st.info("A lower standard deviation indicates a more consistent sleep schedule.")
                 
                 # Average Sleep by Day of Week & Tracking Frequency
                 daily_sleep['Day_of_Week'] = daily_sleep['Date'].dt.day_name()
@@ -197,6 +201,7 @@ try:
                     day_avg = daily_sleep.groupby('Day_of_Week')['Hours'].mean().reindex(day_order).reset_index()
                     fig_day_avg = px.bar(day_avg, x='Day_of_Week', y='Hours', title='Average Sleep Duration by Day', labels={'Day_of_Week': 'Day', 'Hours': 'Average Sleep Hours'})
                     fig_day_avg.update_traces(text=[f"{val:.1f}h" for val in day_avg['Hours']], textposition='outside')
+                    fig_day_avg.update_layout(margin=dict(t=40, b=40, l=40, r=40))
                     st.plotly_chart(fig_day_avg, use_container_width=True)
                     
                 with col_weekly2:
@@ -204,10 +209,10 @@ try:
                     day_counts.columns = ['Day_of_Week', 'Count']
                     fig_day_counts = px.bar(day_counts, x='Day_of_Week', y='Count', title='Number of Tracked Days by Day of Week', labels={'Day_of_Week': 'Day', 'Count': 'Number of Days Tracked'})
                     fig_day_counts.update_traces(text=[f"{val}" for val in day_counts['Count']], textposition='outside')
+                    fig_day_counts.update_layout(margin=dict(t=40, b=40, l=40, r=40))
                     st.plotly_chart(fig_day_counts, use_container_width=True)
 
-                st.markdown("---")
-                with st.expander("Show Consistency Recommendations & Scores"):
+                with st.expander("Consistency Recommendations & Scores"):
                     st.markdown(f"""
                     Your average bedtime consistency score is **{bedtime_std:.2f} hours** (standard deviation).
 
@@ -232,11 +237,7 @@ try:
                 # Flat layout for variance analytics
                 display_day_of_week_variability(daily_sleep)
                 
-                st.markdown("---")
-                
                 display_moving_variance_analysis(daily_sleep)
-                
-                st.markdown("---")
 
                 display_extreme_outliers(daily_sleep, plot_df)
             else:
@@ -264,12 +265,14 @@ try:
                     with col1:
                         for metric in selected_metrics:
                             fig = px.line(plot_df, x='From', y=metric, title=f'{metric} Over Time', labels={'From': 'Date', 'value': metric})
+                            fig.update_layout(margin=dict(t=40, b=40, l=40, r=40))
                             st.plotly_chart(fig, use_container_width=True)
 
                     # Quality Distribution Histograms
                     with col2:
                         for metric in selected_metrics:
                             fig = px.histogram(plot_df, x=metric, nbins=20, title=f'Distribution of {metric}')
+                            fig.update_layout(margin=dict(t=40, b=40, l=40, r=40))
                             st.plotly_chart(fig, use_container_width=True)
 
                     # Correlation Heatmap
@@ -289,13 +292,15 @@ try:
                                 text=correlation_matrix.values,
                                 texttemplate="%{text:.2f}"
                             ))
-                            fig_heatmap.update_layout(title='Correlation Between Selected Metrics and Sleep Duration')
+                            fig_heatmap.update_layout(
+                                title='Correlation Between Selected Metrics and Sleep Duration',
+                                margin=dict(t=40, b=40, l=40, r=40)
+                            )
                             st.plotly_chart(fig_heatmap, use_container_width=True)
                         else:
                             st.info("Select at least one metric to see correlation with sleep duration.")
                 
-                st.markdown("---")
-                with st.expander("Show Correlation Interpretations & Recommendations"):
+                with st.expander("Correlation Interpretations & Recommendations"):
                     st.markdown("""
                     - **Positive Correlation** (closer to +1.0): When one metric increases, the other tends to increase. For example, more 'Deep sleep' might correlate with higher 'Snoring' if you snore more during deep sleep phases.
                     - **Negative Correlation** (closer to -1.0): When one metric increases, the other tends to decrease. For example, higher 'Noise' levels might correlate with lower 'Deep sleep' duration.
