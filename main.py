@@ -42,15 +42,14 @@ try:
     # Create dashboard layout with tabs
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📈 Sleep Duration & Trends", 
+        "🕐 Sleep Patterns & Timing",
         "🔬 Sleep Variance",
         "💤 Sleep Quality & Metrics", 
-        "🕐 Sleep Patterns & Timing",
         "📋 Raw Data & Overview", 
         "🔔 Notifications & Processing"
     ])
     
     with tab1:
-        st.header("📈 Sleep Duration & Trends")
         
         try:
             if 'From' not in df.columns or 'Hours' not in df.columns:
@@ -63,11 +62,7 @@ try:
                     # Store processing info in session state for notifications tab
                     st.session_state.processing_info = processing_info
                     
-                    # --- BASIC DURATION ANALYSIS ---
-                    st.subheader("Basic Duration Analysis")
-                    
                     # Timeline Analysis
-                    st.markdown("#### Sleep Duration Over Time")
                     fig1 = px.bar(daily_sleep, x='Date', y='Hours', 
                                 title='Total Sleep Duration Per Day',
                                 labels={'Date': 'Date', 'Hours': 'Total Sleep Hours'})
@@ -82,7 +77,6 @@ try:
                     st.plotly_chart(fig1, use_container_width=True)
                     
                     # Sleep duration distribution
-                    st.markdown("#### Sleep Duration Distribution")
                     fig2 = px.histogram(daily_sleep, x='Hours', nbins=20, 
                                         title='Distribution of Daily Total Sleep Duration',
                                         labels={'Hours': 'Total Sleep Hours', 'count': 'Frequency'})
@@ -93,7 +87,6 @@ try:
                     st.plotly_chart(fig2, use_container_width=True)
 
                     # Overall Sleep Statistics
-                    st.markdown("#### Overall Sleep Statistics")
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         avg_sleep = daily_sleep['Hours'].mean()
@@ -108,20 +101,13 @@ try:
                         multi_session_days = processing_info['multi_session_days']
                         st.metric("Days with Multiple Sleep Periods", f"{multi_session_days}")
 
-                    st.markdown("---")
-
-                    # --- DATA QUALITY INSIGHTS ---
-                    st.subheader("Data Quality Insights")
-
                     # Create columns for layout
                     col_quality1, col_quality2 = st.columns(2)
 
                     with col_quality1:
-                        st.markdown("#### Recording Frequency Analysis")
                         display_recording_frequency(daily_sleep, plot_df)
                     
                     with col_quality2:
-                        st.markdown("#### Multiple Sleep Sessions Details")
                         multi_session_days = processing_info.get('multi_session_days', 0)
                         if multi_session_days > 0:
                             with st.expander(f"View details for {multi_session_days} days with multiple sessions"):
@@ -157,7 +143,86 @@ try:
             st.error(f"Error analyzing sleep duration: {str(e)}")
     
     with tab2:
-        st.header("🔬 Sleep Variance")
+        
+        try:
+            # Use the centralized data processor
+            plot_df, daily_sleep, processing_info = get_duration_analysis_data(df)
+            patterns_df = get_patterns_analysis_data(df)
+            
+            if patterns_df is not None and len(patterns_df) > 0:
+                
+                # Bedtime and Wake Time Distributions
+                col1, col2 = st.columns(2)
+                with col1:
+                    bedtime_hours = patterns_df['From'].dt.hour + patterns_df['From'].dt.minute / 60
+                    fig_bedtime = px.histogram(x=bedtime_hours, nbins=24, title="Bedtime Distribution (24h)", labels={'x': 'Hour of Day'})
+                    fig_bedtime.update_layout(
+                        xaxis_title="Hour of Day (e.g., 23.5 = 11:30 PM)", 
+                        yaxis_title="Frequency",
+                        xaxis=dict(tickmode='linear', tick0=0, dtick=1)
+                    )
+                    
+                    # Add hour labels - simpler approach
+                    fig_bedtime.update_traces(texttemplate='%{y}', textposition='outside')
+                    
+                    st.plotly_chart(fig_bedtime, use_container_width=True)
+
+                with col2:
+                    wake_time_hours = patterns_df['To'].dt.hour + patterns_df['To'].dt.minute / 60
+                    fig_wake_time = px.histogram(x=wake_time_hours, nbins=24, title="Wake Time Distribution (24h)", labels={'x': 'Hour of Day'})
+                    fig_wake_time.update_layout(
+                        xaxis_title="Hour of Day (e.g., 7.5 = 7:30 AM)", 
+                        yaxis_title="Frequency",
+                        xaxis=dict(tickmode='linear', tick0=0, dtick=1)
+                    )
+                    
+                    # Add hour labels - simpler approach
+                    fig_wake_time.update_traces(texttemplate='%{y}', textposition='outside')
+                    
+                    st.plotly_chart(fig_wake_time, use_container_width=True)
+
+                # Sleep Schedule Consistency
+                bedtime_std = patterns_df['bedtime'].std()
+                st.metric("Bedtime Standard Deviation", f"{bedtime_std:.2f} hours")
+                st.info("A lower standard deviation indicates a more consistent sleep schedule.")
+                
+                st.markdown("---")
+                
+                # Average Sleep by Day of Week & Tracking Frequency
+                daily_sleep['Day_of_Week'] = daily_sleep['Date'].dt.day_name()
+                day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                
+                col_weekly1, col_weekly2 = st.columns(2)
+                with col_weekly1:
+                    day_avg = daily_sleep.groupby('Day_of_Week')['Hours'].mean().reindex(day_order).reset_index()
+                    fig_day_avg = px.bar(day_avg, x='Day_of_Week', y='Hours', title='Average Sleep Duration by Day', labels={'Day_of_Week': 'Day', 'Hours': 'Average Sleep Hours'})
+                    fig_day_avg.update_traces(text=[f"{val:.1f}h" for val in day_avg['Hours']], textposition='outside')
+                    st.plotly_chart(fig_day_avg, use_container_width=True)
+                    
+                with col_weekly2:
+                    day_counts = daily_sleep['Day_of_Week'].value_counts().reindex(day_order).reset_index()
+                    day_counts.columns = ['Day_of_Week', 'Count']
+                    fig_day_counts = px.bar(day_counts, x='Day_of_Week', y='Count', title='Number of Tracked Days by Day of Week', labels={'Day_of_Week': 'Day', 'Count': 'Number of Days Tracked'})
+                    fig_day_counts.update_traces(text=[f"{val}" for val in day_counts['Count']], textposition='outside')
+                    st.plotly_chart(fig_day_counts, use_container_width=True)
+
+                st.markdown("---")
+                with st.expander("Show Consistency Recommendations & Scores"):
+                    st.markdown(f"""
+                    Your average bedtime consistency score is **{bedtime_std:.2f} hours** (standard deviation).
+
+                    - **Under 1 hour**: Very consistent schedule.
+                    - **1 to 1.5 hours**: Fairly consistent, but with some variability.
+                    - **Over 1.5 hours**: Inconsistent schedule, which can impact sleep quality.
+
+                    **Recommendation**: Aim to go to bed and wake up around the same time each day, even on weekends, to stabilize your body's internal clock.
+                    """)
+            else:
+                st.warning("Not enough data to analyze sleep patterns.")
+        except Exception as e:
+            st.error(f"Error analyzing sleep patterns: {str(e)}")
+
+    with tab3:
         
         try:
             # This data is required for the variance analysis
@@ -165,60 +230,49 @@ try:
             
             if daily_sleep is not None and len(daily_sleep) > 0:
                 # Flat layout for variance analytics
-                st.subheader("📅 Day-of-Week Variability")
                 display_day_of_week_variability(daily_sleep)
                 
                 st.markdown("---")
                 
-                st.subheader("📈 10-Day Moving Variance")
                 display_moving_variance_analysis(daily_sleep)
                 
                 st.markdown("---")
 
-                st.subheader("🎯 Extreme Outliers")
                 display_extreme_outliers(daily_sleep, plot_df)
             else:
                 st.warning("No sleep data available for variance analysis.")
         except Exception as e:
             st.error(f"Error in 'Sleep Variance' tab: {str(e)}")
 
-    with tab3:
-        st.header("💤 Sleep Quality & Metrics")
+    with tab4:
         
         try:
             # Use the centralized data processor
             plot_df, available_metrics = get_quality_analysis_data(df)
             
             if available_metrics and len(plot_df) > 0:
-                st.subheader("Quality Metrics Selection")
                 selected_metrics = st.multiselect(
                     "Select metrics to view:",
                     available_metrics,
                     default=available_metrics[:2]
                 )
                 
-                st.markdown("---")
-                st.subheader("Quality Analysis Charts")
-                
                 col1, col2 = st.columns(2)
                 
                 if selected_metrics and 'From' in plot_df.columns:
                     # Quality Metrics Over Time
                     with col1:
-                        st.markdown("#### Quality Metrics Over Time")
                         for metric in selected_metrics:
                             fig = px.line(plot_df, x='From', y=metric, title=f'{metric} Over Time', labels={'From': 'Date', 'value': metric})
                             st.plotly_chart(fig, use_container_width=True)
 
                     # Quality Distribution Histograms
                     with col2:
-                        st.markdown("#### Quality Distribution Histograms")
                         for metric in selected_metrics:
                             fig = px.histogram(plot_df, x=metric, nbins=20, title=f'Distribution of {metric}')
                             st.plotly_chart(fig, use_container_width=True)
 
                     # Correlation Heatmap
-                    st.markdown("#### Correlation Heatmap (Quality vs. Duration)")
                     
                     # Ensure 'Hours' is in the dataframe for correlation
                     if 'Hours' not in plot_df.columns:
@@ -241,7 +295,6 @@ try:
                             st.info("Select at least one metric to see correlation with sleep duration.")
                 
                 st.markdown("---")
-                st.subheader("Quality Insights")
                 with st.expander("Show Correlation Interpretations & Recommendations"):
                     st.markdown("""
                     - **Positive Correlation** (closer to +1.0): When one metric increases, the other tends to increase. For example, more 'Deep sleep' might correlate with higher 'Snoring' if you snore more during deep sleep phases.
@@ -256,106 +309,37 @@ try:
         except Exception as e:
             st.error(f"Error analyzing sleep quality: {str(e)}")
             
-    with tab4:
-        st.header("🕐 Sleep Patterns & Timing")
-        
-        try:
-            plot_df, daily_sleep, pattern_info = get_patterns_analysis_data(df)
-            
-            if plot_df is not None and len(plot_df) > 0:
-                st.subheader("Sleep Timing Analysis")
-                
-                # Bedtime and Wake Time Distributions
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("#### Bedtime Distribution")
-                    bedtime_hours = plot_df['From'].dt.hour + plot_df['From'].dt.minute / 60
-                    fig_bedtime = px.histogram(x=bedtime_hours, nbins=24, title="Bedtime Distribution (24h)", labels={'x': 'Hour of Day'})
-                    fig_bedtime.update_layout(xaxis_title="Hour of Day (e.g., 23.5 = 11:30 PM)", yaxis_title="Frequency")
-                    st.plotly_chart(fig_bedtime, use_container_width=True)
-
-                with col2:
-                    st.markdown("#### Wake Time Distribution")
-                    wake_time_hours = plot_df['To'].dt.hour + plot_df['To'].dt.minute / 60
-                    fig_wake_time = px.histogram(x=wake_time_hours, nbins=24, title="Wake Time Distribution (24h)", labels={'x': 'Hour of Day'})
-                    fig_wake_time.update_layout(xaxis_title="Hour of Day (e.g., 7.5 = 7:30 AM)", yaxis_title="Frequency")
-                    st.plotly_chart(fig_wake_time, use_container_width=True)
-
-                # Sleep Schedule Consistency
-                st.markdown("#### Sleep Consistency Analysis")
-                if pattern_info:
-                    st.metric("Bedtime Standard Deviation", f"{pattern_info['bedtime_std']:.2f} hours")
-                    st.info("A lower standard deviation indicates a more consistent sleep schedule.")
-                
-                st.markdown("---")
-                st.subheader("Weekly Patterns")
-                
-                # Average Sleep by Day of Week & Tracking Frequency
-                daily_sleep['Day_of_Week'] = daily_sleep['Date'].dt.day_name()
-                day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-                
-                col_weekly1, col_weekly2 = st.columns(2)
-                with col_weekly1:
-                    st.markdown("#### Average Sleep by Day of Week")
-                    day_avg = daily_sleep.groupby('Day_of_Week')['Hours'].mean().reindex(day_order).reset_index()
-                    fig_day_avg = px.bar(day_avg, x='Day_of_Week', y='Hours', title='Average Sleep Duration by Day', labels={'Day_of_Week': 'Day', 'Hours': 'Average Sleep Hours'})
-                    st.plotly_chart(fig_day_avg, use_container_width=True)
-                    
-                with col_weekly2:
-                    st.markdown("#### Tracking Frequency by Day of Week")
-                    day_counts = daily_sleep['Day_of_Week'].value_counts().reindex(day_order).reset_index()
-                    day_counts.columns = ['Day_of_Week', 'Count']
-                    fig_day_counts = px.bar(day_counts, x='Day_of_Week', y='Count', title='Number of Tracked Days by Day of Week', labels={'Day_of_Week': 'Day', 'Count': 'Number of Days Tracked'})
-                    st.plotly_chart(fig_day_counts, use_container_width=True)
-
-                st.markdown("---")
-                st.subheader("Pattern Insights")
-                with st.expander("Show Consistency Recommendations & Scores"):
-                    st.markdown(f"""
-                    Your average bedtime consistency score is **{pattern_info['bedtime_std']:.2f} hours** (standard deviation).
-
-                    - **Under 1 hour**: Very consistent schedule.
-                    - **1 to 1.5 hours**: Fairly consistent, but with some variability.
-                    - **Over 1.5 hours**: Inconsistent schedule, which can impact sleep quality.
-
-                    **Recommendation**: Aim to go to bed and wake up around the same time each day, even on weekends, to stabilize your body's internal clock.
-                    """)
-            else:
-                st.warning("Not enough data to analyze sleep patterns.")
-        except Exception as e:
-            st.error(f"Error analyzing sleep patterns: {str(e)}")
-
     with tab5:
-        st.header("📋 Raw Data & Overview")
         
         try:
-            file_info, data_stats, column_info = get_data_overview_info(df)
+            overview_info = get_data_overview_info(df)
 
-            st.subheader("Data Summary")
-            
             col1, col2 = st.columns(2)
             with col1:
-                st.markdown("#### File Information & Stats")
+                file_info = overview_info.get('file_info', {})
                 st.json({
-                    "File Name": file_info.get("file_name", "N/A"),
-                    "File Size": file_info.get("file_size", "N/A"),
+                    "File Name": file_info.get("name", "N/A"),
+                    "File Size": f"{file_info.get('size_mb', 0):.1f} MB" if file_info.get('size_mb') else "N/A",
                     "Last Modified": file_info.get("last_modified", "N/A")
                 })
             with col2:
-                st.markdown("#### Data Range & Record Count")
+                date_range = overview_info.get('date_range', {})
                 st.json({
-                    "Total Records": data_stats.get("total_records", "N/A"),
-                    "Date Range": data_stats.get("date_range", "N/A"),
+                    "Total Records": overview_info.get("total_records", "N/A"),
+                    "Date Range": f"{date_range.get('start', 'N/A')} to {date_range.get('end', 'N/A')}" if date_range else "N/A",
                     "Timezone": st.session_state.get('target_timezone', 'N/A')
                 })
             
-            st.markdown("#### Column Information")
-            st.dataframe(column_info, use_container_width=True)
+            # Column information
+            if 'columns' in overview_info:
+                columns_df = pd.DataFrame({
+                    'Column': overview_info['columns'],
+                    'Type': [str(df[col].dtype) for col in overview_info['columns']]
+                })
+                st.dataframe(columns_df, use_container_width=True)
 
-            st.subheader("Raw Data Preview")
             st.dataframe(df.head(10))
             
-            st.subheader("Data Health Check")
             validation_results = st.session_state.get('validation_results', {})
             if validation_results:
                 st.success("Data validation passed with the following checks:")
@@ -367,16 +351,13 @@ try:
             st.error(f"Error displaying data overview: {str(e)}")
 
     with tab6:
-        st.header("🔔 Notifications & Processing")
         
         # Display file loading info
-        st.subheader("Data Loading")
         file_info = st.session_state.get('file_info', {})
         if file_info:
             st.success(f"Successfully loaded data from `{file_info.get('file_name', 'N/A')}`.")
         
         # Display timezone processing info
-        st.subheader("Processing Information")
         processing_info = st.session_state.get('processing_info', {})
         if processing_info:
             st.json(processing_info)
@@ -384,7 +365,6 @@ try:
             st.info("No processing messages.")
 
         # Display any validation messages
-        st.subheader("System Notifications")
         validation_results = st.session_state.get('validation_results', {})
         if validation_results:
             st.write("Data Validation results:")

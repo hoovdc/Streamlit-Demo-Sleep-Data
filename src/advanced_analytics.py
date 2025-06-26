@@ -184,7 +184,6 @@ def calculate_day_of_week_variability(daily_sleep):
 
 def display_moving_variance_analysis(daily_sleep):
     """Display 10-day moving variance analysis"""
-    st.subheader("📈 10-Day Moving Variance Analysis")
     
     variance_data = calculate_moving_variance(daily_sleep)
     
@@ -244,7 +243,6 @@ def display_moving_variance_analysis(daily_sleep):
 
 def display_extreme_outliers(daily_sleep, plot_df):
     """Display extreme outliers analysis"""
-    st.subheader("🎯 Extreme Outliers Detection")
     
     outliers, outlier_details = detect_extreme_outliers(daily_sleep, plot_df)
     
@@ -276,7 +274,6 @@ def display_extreme_outliers(daily_sleep, plot_df):
 
 def display_recording_frequency(daily_sleep, plot_df):
     """Display recording frequency analysis"""
-    st.subheader("📊 Recording Frequency Analysis")
     
     freq_stats = analyze_recording_frequency(daily_sleep, plot_df)
     
@@ -314,7 +311,6 @@ def display_recording_frequency(daily_sleep, plot_df):
         st.success("✅ No data gaps detected - excellent recording consistency!")
     
     # Sessions per day analysis
-    st.write("**Sessions Per Day Distribution:**")
     session_counts = freq_stats['session_counts']
     
     fig = px.histogram(session_counts, x='Session_Count',
@@ -338,7 +334,6 @@ def display_recording_frequency(daily_sleep, plot_df):
 
 def display_day_of_week_variability(daily_sleep):
     """Display day of week variability analysis"""
-    st.subheader("📅 Variability per Day of Week")
     
     day_stats = calculate_day_of_week_variability(daily_sleep)
     
