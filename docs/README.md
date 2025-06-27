@@ -69,12 +69,21 @@ The app will eventually support:
 
 ## ✨ Features
 
+The dashboard provides comprehensive sleep analysis through an organized tabbed interface:
+
 ### 📊 Sleep Duration Analysis
 - **Daily Sleep Tracking**: Bar chart showing total sleep hours per day
 - **Sleep Distribution**: Histogram of sleep duration patterns
 - **Weekly Patterns**: Average sleep by day of the week
 - **Multi-Sleep Days**: Detection and analysis of days with multiple sleep periods
 - **Sleep Statistics**: Average, median, range, and consistency metrics
+
+### 🔬 Sleep Variance & Advanced Analytics
+- **10-Day Moving Variance**: Track sleep consistency trends over rolling windows
+- **Extreme Outliers Detection**: Identify and analyze the most unusual sleep periods with statistical insights
+- **Recording Frequency Analysis**: Monitor data gaps, tracking rates, and session distribution patterns
+- **Day-of-Week Variability**: Precise variability metrics (in hours) per day of the week
+- **Statistical Insights**: Z-scores, standard deviations, and coefficient of variation analysis
 
 ### 🎯 Sleep Quality Metrics
 - **Quality Indicators**: Deep sleep, cycles, snoring, and noise analysis
@@ -94,18 +103,29 @@ The app will eventually support:
 - **Multi-Timezone Support**: Handles travel and timezone changes automatically
 - **Timezone Selection**: Choose your preferred display timezone from the sidebar
 
-### 🔧 Troubleshooting Tools
+### 🔧 Data Management & Troubleshooting
 - **Data Validation**: Automatic detection of common CSV issues
 - **File Upload**: Manual file upload if automatic detection fails
 - **Format Guidance**: Instructions for preparing data files
 - **Error Diagnostics**: Clear error messages and solution suggestions
+- **Raw Data Inspection**: View and validate your data structure
 
-### 📢 Notification System
-- **Centralized Notifications**: All system messages, warnings, and processing updates are contained within the "Notifications" tab for a clean, uncluttered main interface
+### 📢 Centralized Notifications
+- **Clean Interface**: All system messages, warnings, and processing updates are contained within a dedicated notifications area
 - **Processing Updates**: Data loading progress, timezone conversion status, and data validation results
-- **No Home Page Clutter**: The main dashboard remains focused on analysis and visualization
+- **Transparent Processing**: Full visibility into how your data is processed and analyzed
 
 ## 🛠️ Technical Details
+
+### Modular Architecture
+
+The dashboard is built with a clean, modular architecture for maintainability and performance:
+
+- **`src/config.py`**: Centralized configuration, constants, and styling
+- **`src/data_loader.py`**: File detection, data loading, and timezone processing  
+- **`src/data_processor.py`**: Cached data processing pipeline for optimal performance
+- **`src/advanced_analytics.py`**: Statistical analysis and variance calculations
+- **`main.py`**: Dashboard controller and user interface
 
 ### Sleep Record Aggregation Logic
 
@@ -199,11 +219,12 @@ For better performance:
 
 ## 📈 Planned Features
 
-1. **Automated Data Ingestion**: Direct Google Drive integration
-2. **Component Modularization**: Break monolith into separate modules  
-3. **Advanced Analytics**: Predictive sleep quality models
-4. **Export Features**: PDF reports and data export options
-5. **Mobile Responsiveness**: Better mobile viewing experience
+1. **Automated Google Drive Integration**: Direct connection to Sleep as Android backup folders
+2. **Graceful Terminal Management**: Clean shutdown controls and resource cleanup
+3. **Advanced Predictive Analytics**: Sleep quality prediction models and trend forecasting
+4. **Export & Reporting**: PDF reports and comprehensive data export options
+5. **Enhanced Mobile Experience**: Responsive design optimization for mobile devices
+6. **Sleep Goal Tracking**: Personal sleep targets and achievement monitoring
 
 ## 🔗 Links
 

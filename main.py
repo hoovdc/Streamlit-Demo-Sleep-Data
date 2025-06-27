@@ -16,7 +16,7 @@ import pytz
 from src.config import configure_page, apply_custom_styling, APP_TITLE, DEFAULT_TIMEZONE
 from src.data_loader import find_latest_data_file, load_data
 from src.data_processor import get_duration_analysis_data, get_quality_analysis_data, get_patterns_analysis_data, get_data_overview_info, clear_processing_cache
-from src.advanced_analytics import display_moving_variance_analysis, display_extreme_outliers, display_recording_frequency, display_day_of_week_variability
+from src.advanced_analytics import display_moving_variance_analysis, display_extreme_outliers, display_recording_frequency, display_day_of_week_variability, display_sleep_time_polar_plot, display_sleep_time_polar_plot_nap_view
 
 # Configure page settings
 configure_page()
@@ -69,10 +69,36 @@ try:
                     fig1.add_hline(y=8, line_dash="dash", line_color="green", 
                                     annotation_text="Ideal Sleep", 
                                     annotation_position="top right")
+                    
+                    # Add 10-day moving average overlay
+                    if len(daily_sleep) >= 10:
+                        daily_sleep_sorted = daily_sleep.sort_values('Date')
+                        daily_sleep_sorted['Moving_Avg_10'] = daily_sleep_sorted['Hours'].rolling(window=10, min_periods=10).mean()
+                        
+                        # Add moving average line (only where we have enough data)
+                        ma_data = daily_sleep_sorted.dropna(subset=['Moving_Avg_10'])
+                        if len(ma_data) > 0:
+                            fig1.add_scatter(
+                                x=ma_data['Date'], 
+                                y=ma_data['Moving_Avg_10'],
+                                mode='lines',
+                                name='10-Day Moving Average',
+                                line=dict(color='orange', width=3),
+                                hovertemplate='<b>10-Day Average</b><br>Date: %{x}<br>Hours: %{y:.1f}<extra></extra>'
+                            )
+                    
                     max_hours = daily_sleep['Hours'].max()
                     y_max = 2 * (max_hours // 2) + 2
                     fig1.update_layout(
-                        yaxis=dict(tickmode='linear', tick0=0, dtick=2, range=[0, y_max], gridcolor='lightgray', griddash='dash')
+                        yaxis=dict(tickmode='linear', tick0=0, dtick=2, range=[0, y_max], gridcolor='lightgray', griddash='dash'),
+                        showlegend=True,
+                        legend=dict(
+                            orientation="h",
+                            yanchor="top",
+                            y=-0.22,
+                            xanchor="center",
+                            x=0.5
+                        )
                     )
                     st.plotly_chart(fig1, use_container_width=True)
                     
@@ -222,6 +248,18 @@ try:
 
                     **Recommendation**: Aim to go to bed and wake up around the same time each day, even on weekends, to stabilize your body's internal clock.
                     """)
+                
+                # 24-Hour Sleep Distribution Polar Plot
+                st.markdown("---")
+                st.markdown("### 🕰️ 24-Hour Sleep Distribution")
+                st.markdown("##### Total sleep hours by time of day (15-minute intervals)")
+                display_sleep_time_polar_plot(df)
+                
+                # Nap View - Scaled for daytime visibility
+                st.markdown("### 🌅 Nap View (10am-7pm scaled)")
+                st.markdown("##### Daytime sleep scaled for better nap visibility")
+                display_sleep_time_polar_plot_nap_view(df)
+                
             else:
                 st.warning("Not enough data to analyze sleep patterns.")
         except Exception as e:

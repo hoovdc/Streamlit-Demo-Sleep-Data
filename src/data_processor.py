@@ -164,4 +164,77 @@ def clear_processing_cache():
     get_duration_analysis_data.clear()
     get_quality_analysis_data.clear()
     get_patterns_analysis_data.clear()
-    get_data_overview_info.clear() 
+    get_data_overview_info.clear()
+    get_sleep_time_distribution_data.clear()
+
+@st.cache_data
+def get_sleep_time_distribution_data(df, interval_minutes=15):
+    """
+    Process sleep data into 24-hour time-of-day distribution for polar plot.
+    
+    Args:
+        df: Raw sleep data DataFrame
+        interval_minutes: Time interval in minutes (default 15)
+    
+    Returns:
+        DataFrame with columns: 'time_slot', 'time_label', 'total_hours', 'degrees'
+    """
+    base_df = get_base_sleep_data(df)
+    if len(base_df) == 0:
+        return pd.DataFrame()
+    
+    # Ensure we have required columns
+    if 'From' not in base_df.columns or 'To' not in base_df.columns:
+        return pd.DataFrame()
+    
+    # Calculate number of slots in 24 hours
+    slots_per_day = (24 * 60) // interval_minutes
+    
+    # Initialize array to accumulate sleep minutes per time slot
+    sleep_minutes_per_slot = np.zeros(slots_per_day)
+    
+    # Process each sleep period
+    for _, row in base_df.iterrows():
+        start_time = row['From']
+        end_time = row['To']
+        
+        if pd.isna(start_time) or pd.isna(end_time):
+            continue
+            
+        # Create minute-by-minute range for this sleep period
+        sleep_duration_minutes = int((end_time - start_time).total_seconds() / 60)
+        
+        for minute_offset in range(sleep_duration_minutes):
+            current_moment = start_time + pd.Timedelta(minutes=minute_offset)
+            
+            # Calculate which time slot this minute belongs to (using time of day only)
+            hour = current_moment.hour
+            minute = current_moment.minute
+            total_minutes_in_day = hour * 60 + minute
+            slot_index = total_minutes_in_day // interval_minutes
+            
+            # Ensure slot_index is valid (handle edge case of exactly midnight)
+            if slot_index >= slots_per_day:
+                slot_index = 0
+                
+            # Add one minute to this slot
+            sleep_minutes_per_slot[slot_index] += 1
+    
+    # Convert to hours and create result DataFrame
+    sleep_hours_per_slot = sleep_minutes_per_slot / 60
+    
+    # Create time labels and other metadata
+    time_data = []
+    for i in range(slots_per_day):
+        slot_start_minutes = i * interval_minutes
+        hours = slot_start_minutes // 60
+        minutes = slot_start_minutes % 60
+        
+        time_data.append({
+            'time_slot': i,
+            'time_label': f"{hours:02d}:{minutes:02d}",
+            'total_hours': sleep_hours_per_slot[i],
+            'degrees': (i * 360) / slots_per_day  # Convert to polar coordinates
+        })
+    
+    return pd.DataFrame(time_data) 

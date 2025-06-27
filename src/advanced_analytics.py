@@ -378,4 +378,186 @@ def display_day_of_week_variability(daily_sleep):
         st.info(f"**Most Variable:** {most_variable_day} ({day_stats['std'].max():.1f}h variability)")
     
     with col2:
-        st.success(f"**Most Consistent:** {most_consistent_day} ({day_stats['std'].min():.1f}h variability)") 
+        st.success(f"**Most Consistent:** {most_consistent_day} ({day_stats['std'].min():.1f}h variability)")
+
+def display_sleep_time_polar_plot(df):
+    """Display 24-hour sleep distribution as a polar plot"""
+    
+    from .data_processor import get_sleep_time_distribution_data
+    
+    time_dist_data = get_sleep_time_distribution_data(df, interval_minutes=15)
+    
+    if time_dist_data is None or len(time_dist_data) == 0:
+        st.warning("No data available for 24-hour sleep distribution analysis")
+        return
+    
+    # Filter out time slots with no sleep (optional - can be removed for complete visualization)
+    # time_dist_data = time_dist_data[time_dist_data['total_hours'] > 0]
+    
+    if len(time_dist_data) == 0:
+        st.info("No sleep time distribution data to display")
+        return
+    
+    # Create polar plot
+    fig = go.Figure(go.Scatterpolar(
+        r=time_dist_data['total_hours'],
+        theta=time_dist_data['degrees'],
+        mode='lines+markers',
+        fill='toself',
+        name='Sleep Hours',
+        line=dict(color='rgba(135, 206, 250, 0.9)', width=2),  # Light blue line
+        fillcolor='rgba(100, 149, 237, 0.4)',  # Cornflower blue fill
+        marker=dict(size=4, color='rgba(135, 206, 250, 0.9)'),
+        hovertemplate='<b>Time:</b> %{customdata}<br><b>Total Sleep:</b> %{r:.1f} hours<extra></extra>',
+        customdata=time_dist_data['time_label']
+    ))
+    
+    # Calculate max hours for radial axis range
+    max_hours = time_dist_data['total_hours'].max() if len(time_dist_data) > 0 else 1
+    radial_max = max(max_hours * 1.1, 1)  # Add 10% padding, minimum 1 hour
+    
+    # Create time labels for angular axis (every hour)
+    hour_ticks = list(range(0, 360, 15))  # Every 15 degrees = every hour
+    hour_labels = [f"{i//15:02d}:00" for i in hour_ticks]
+    
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                title="Total Hours Slept",
+                range=[0, radial_max],
+                tickmode='linear',
+                tick0=0,
+                dtick=max(1, radial_max//5),  # About 5 tick marks
+                title_font=dict(color='white'),
+                tickfont=dict(color='white'),
+                gridcolor='rgba(255, 255, 255, 0.3)'
+            ),
+            angularaxis=dict(
+                tickmode='array',
+                tickvals=hour_ticks,
+                ticktext=hour_labels,
+                direction='clockwise',
+                rotation=90,  # Start at top (midnight)
+                showgrid=True,
+                gridcolor='rgba(255, 255, 255, 0.3)',
+                gridwidth=1,
+                tickfont=dict(color='white', size=12)
+            ),
+            bgcolor='#0E1117'
+        ),
+        showlegend=False,
+        margin=dict(t=40, b=40, l=40, r=40),
+        height=910,
+        width=910,
+        paper_bgcolor='#0E1117',
+        plot_bgcolor='#0E1117'
+    )
+    
+    st.plotly_chart(fig, use_container_width=False)
+    
+    # Additional insights (keeping only the nighttime/daytime distribution)
+    time_dist_data = get_sleep_time_distribution_data(df, interval_minutes=15)
+    if len(time_dist_data) > 0:
+        total_sleep_hours = time_dist_data['total_hours'].sum()
+        
+        nighttime_hours = time_dist_data[
+            (time_dist_data['time_slot'] >= 84) |  # 21:00 and later (84 * 15min = 1260min = 21:00)  
+            (time_dist_data['time_slot'] <= 32)    # 08:00 and earlier (32 * 15min = 480min = 08:00)
+        ]['total_hours'].sum()
+        
+        if total_sleep_hours > 0:
+            nighttime_percentage = (nighttime_hours / total_sleep_hours) * 100
+            st.info(f"**Sleep Distribution:** {nighttime_percentage:.1f}% nighttime (9PM-8AM), {100-nighttime_percentage:.1f}% daytime")
+
+def display_sleep_time_polar_plot_nap_view(df):
+    """Display 24-hour sleep distribution as a polar plot scaled for nap visibility (10am-7pm range)"""
+    
+    from .data_processor import get_sleep_time_distribution_data
+    
+    time_dist_data = get_sleep_time_distribution_data(df, interval_minutes=15)
+    
+    if time_dist_data is None or len(time_dist_data) == 0:
+        st.warning("No data available for nap view analysis")
+        return
+    
+    if len(time_dist_data) == 0:
+        st.info("No sleep time distribution data to display for nap view")
+        return
+    
+    # Calculate daytime range (10am to 7pm)
+    # 10:00 AM = slot 40 (10 * 4 slots per hour)
+    # 7:00 PM = slot 76 (19 * 4 slots per hour) 
+    daytime_start_slot = 10 * 4  # 10am
+    daytime_end_slot = 19 * 4    # 7pm
+    
+    # Find maximum sleep value in daytime range for scaling
+    daytime_data = time_dist_data[
+        (time_dist_data['time_slot'] >= daytime_start_slot) & 
+        (time_dist_data['time_slot'] <= daytime_end_slot)
+    ]
+    
+    if len(daytime_data) == 0 or daytime_data['total_hours'].max() == 0:
+        st.info("No daytime sleep detected for nap view (10am-7pm range)")
+        return
+    
+    daytime_max = daytime_data['total_hours'].max()
+    radial_max = max(daytime_max * 1.2, 0.1)  # Add 20% padding, minimum 0.1 hour
+    
+    # Create polar plot with daytime scaling
+    fig = go.Figure(go.Scatterpolar(
+        r=time_dist_data['total_hours'],
+        theta=time_dist_data['degrees'],
+        mode='lines+markers',
+        fill='toself',
+        name='Sleep Hours',
+        line=dict(color='rgba(255, 165, 0, 0.9)', width=2),  # Orange line for nap view
+        fillcolor='rgba(255, 140, 0, 0.4)',  # Dark orange fill
+        marker=dict(size=4, color='rgba(255, 165, 0, 0.9)'),
+        hovertemplate='<b>Time:</b> %{customdata}<br><b>Total Sleep:</b> %{r:.1f} hours<extra></extra>',
+        customdata=time_dist_data['time_label']
+    ))
+    
+    # Create time labels for angular axis (every hour)
+    hour_ticks = list(range(0, 360, 15))  # Every 15 degrees = every hour
+    hour_labels = [f"{i//15:02d}:00" for i in hour_ticks]
+    
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                title="Total Hours Slept",
+                range=[0, radial_max],
+                tickmode='linear',
+                tick0=0,
+                dtick=max(0.05, radial_max//5),  # Smaller tick intervals for nap scale
+                title_font=dict(color='white'),
+                tickfont=dict(color='white'),
+                gridcolor='rgba(255, 255, 255, 0.3)'
+            ),
+            angularaxis=dict(
+                tickmode='array',
+                tickvals=hour_ticks,
+                ticktext=hour_labels,
+                direction='clockwise',
+                rotation=90,  # Start at top (midnight)
+                showgrid=True,
+                gridcolor='rgba(255, 255, 255, 0.3)',
+                gridwidth=1,
+                tickfont=dict(color='white', size=12)
+            ),
+            bgcolor='#0E1117'
+        ),
+        showlegend=False,
+        margin=dict(t=40, b=40, l=40, r=40),
+        height=910,
+        width=910,
+        paper_bgcolor='#0E1117',
+        plot_bgcolor='#0E1117'
+    )
+    
+    st.plotly_chart(fig, use_container_width=False)
+    
+    # Display nap-specific insights
+    total_daytime_hours = daytime_data['total_hours'].sum()
+    if total_daytime_hours > 0:
+        peak_nap_slot = daytime_data.loc[daytime_data['total_hours'].idxmax()]
+        st.info(f"**Nap Insights:** Peak daytime sleep at {peak_nap_slot['time_label']} ({peak_nap_slot['total_hours']:.2f} hours). Total daytime sleep: {total_daytime_hours:.1f} hours") 
