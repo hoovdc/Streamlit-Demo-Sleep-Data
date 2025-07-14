@@ -64,8 +64,8 @@ The app will eventually support:
 4. Updating the dashboard with the newest data
 
 **Google Drive Folders:**
-- Manual backups: [Sleep as Android folder](https://drive.google.com/drive/u/0/folders/15kBAnQDMFdSud2WRF5VwtgCzKd1Jo6gA)
-- Automated backups: [Sleep Cloud backup folder](https://drive.google.com/drive/u/0/folders/1oFWJdhD73s9wVDTVCexmj9LslWSqIKAB)
+- Manual backups: Use your personal folder ID (configure in `secrets/config.toml`)
+- Automated backups: Use your personal folder ID (configure in `secrets/config.toml`)
 
 ## ✨ Features
 
@@ -217,9 +217,20 @@ For better performance:
 2. Place older/larger files in the `old/` subfolder
 3. The app will automatically select the most recent optimized file
 
+### Google Drive Setup Instructions
+To enable automated sync:
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create a new project.
+2. Enable the Google Drive API.
+3. Create OAuth 2.0 Client IDs (select 'Desktop app').
+4. Download the credentials JSON and save as `secrets/gdrive_credentials.json`.
+5. In Google Drive, find your Sleep as Android backup folder ID (from URL).
+6. Edit `secrets/config.toml` and paste the folder_id.
+7. Run the app and authorize via the browser popup on first sync.
+
 ## 📈 Planned Features
 
 1. **Automated Google Drive Integration**: Direct connection to Sleep as Android backup folders
+   - See setup instructions below for Google API credentials.
 2. **Graceful Terminal Management**: Clean shutdown controls and resource cleanup
 3. **Advanced Predictive Analytics**: Sleep quality prediction models and trend forecasting
 4. **Export & Reporting**: PDF reports and comprehensive data export options

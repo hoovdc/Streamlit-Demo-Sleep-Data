@@ -10,8 +10,11 @@ import pytz
 
 from .config import (
     DATA_FOLDER, FILE_PATTERNS, DATE_FORMAT, TARGET_YEAR, 
-    DATE_COLUMNS, NUMERIC_COLUMNS, BASIC_COLUMNS, DEFAULT_TIMEZONE
+    DATE_COLUMNS, NUMERIC_COLUMNS, BASIC_COLUMNS, DEFAULT_TIMEZONE, ENABLE_GDRIVE_SYNC, ENABLE_DB
 )
+
+from src.gdrive_sync import authenticate_gdrive, find_latest_zip, download_zip, load_config
+from src.db_manager import load_from_db, insert_new_data
 
 def find_latest_data_file():
     """
@@ -136,85 +139,59 @@ def assign_sleep_date(row):
     else:
         return start_date
 
-@st.cache_data
-def load_data(uploaded_file=None):
-    """
-    Load and process sleep data from file or uploaded data.
+def sync_from_gdrive():
+    if not ENABLE_GDRIVE_SYNC:
+        return None
     
-    Args:
-        uploaded_file: Optional uploaded file from Streamlit file_uploader
-        
-    Returns:
-        DataFrame: Processed sleep data
-    """
-    # Determine data source
-    if uploaded_file is not None:
-        data_source = uploaded_file
-        source_desc = "uploaded file"
-    else:
-        data_source = find_latest_data_file()
-        if data_source is None:
-            st.error("❌ No sleep data files found in the data folder!")
-            st.write("Expected file patterns:")
-            for pattern in FILE_PATTERNS:
-                st.write(f"- `{pattern}`")
-            return pd.DataFrame()
-        
-        source_desc = f"latest data file: {Path(data_source).name}"
+    # Lazy import only if enabled
+    from src.gdrive_sync import authenticate_gdrive, find_latest_zip, download_zip, load_config
     
     try:
-        # Store loading notification for notifications tab
-        if 'notifications' not in st.session_state:
-            st.session_state.notifications = []
-        st.session_state.notifications.append(f"📊 Loading data from {source_desc}")
-        
-        # Try loading with specific columns as we now know the format
-        df = pd.read_csv(data_source, 
-                        on_bad_lines='skip',
-                        low_memory=False,
-                        engine='c')
-        
-        # Parse date columns - ensure handling 2025 dates correctly
-        try:
-            # Convert date columns using the specific format in this data
-            for date_col in DATE_COLUMNS:
-                if date_col in df.columns:
-                    # Convert to datetime with specified format
-                    df[date_col] = pd.to_datetime(df[date_col], format=DATE_FORMAT, errors='coerce')
-                    
-                    # Ensure all dates are in the correct year (some may have incorrect years)
-                    # Filter out obvious incorrect years (< 2000 or > 2100)
-                    mask = ((df[date_col].dt.year > 2000) & (df[date_col].dt.year < 2100))
-                    df = df[mask]
-        except Exception as e:
-            st.session_state.notifications.append(f"⚠️ Error parsing date columns: {e}")
-        
-        # Process timezone-aware dates BEFORE filtering and numeric processing
-        target_tz = st.session_state.get('target_timezone', DEFAULT_TIMEZONE)
-        df = process_timezone_aware_dates(df, target_tz)
-        
-        # Handle numeric columns
-        for col in NUMERIC_COLUMNS:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-        
-        # Filter for target year and valid hours
-        if 'From' in df.columns and 'Hours' in df.columns:
-            df = df[df['From'].dt.year == TARGET_YEAR].copy()
-            df = df[df['Hours'] > 0].copy()
-            df = df.dropna(subset=['From', 'To', 'Hours'])
-        
-        # Count movement and event columns for reporting
-        movement_cols = [col for col in df.columns if 'Movement' in str(col)]
-        event_cols = [col for col in df.columns if 'Event' in str(col)]
-        
-        # Store success notification for notifications tab
-        st.session_state.notifications.append(f"✅ Successfully loaded {len(df)} sleep records")
-        if movement_cols or event_cols:
-            st.session_state.notifications.append(f"📊 Found {len(movement_cols)} movement data columns and {len(event_cols)} event columns")
-        
-        return df
-        
+        config = load_config()
+        folder_id = config['gdrive']['folder_id']
+        service = authenticate_gdrive()
+        latest_zip_id = find_latest_zip(service, folder_id)
+        if latest_zip_id:
+            csv_path = download_zip(service, latest_zip_id)
+            return csv_path
+        return None
     except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return pd.DataFrame() 
+        # Log error, but don't crash - fall back to local
+        print(f"GDrive sync failed: {e}")
+        return None
+
+@st.cache_data
+def load_data(uploaded_file=None, enable_gdrive_sync=ENABLE_GDRIVE_SYNC):
+    """
+    Load and process sleep data. Skip DB entirely if not enabled; load directly from CSV.
+    """
+    df = pd.DataFrame()  # Empty init
+    source_desc = None
+    
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file, parse_dates=['From', 'To', 'Sched'])
+        source_desc = "uploaded file"
+    else:
+        df = pd.read_csv(DEFAULT_CSV_PATH, parse_dates=['From', 'To', 'Sched'])
+        source_desc = "default CSV file"
+    
+    if ENABLE_DB:
+        # Lazy import only if enabled
+        from src.db_manager import load_from_db, insert_new_data
+        db_df = load_from_db()
+        if not db_df.empty:
+            df = db_df
+            source_desc = "local SQLite database"
+    
+    # Apply processing
+    df = process_data(df)
+    
+    if ENABLE_DB and len(df) > 0:
+        insert_new_data(df)
+    
+    st.session_state.notifications.append(f"📊 Loaded data from {source_desc}")
+    return df
+
+def process_data(df):
+    # Placeholder for any additional processing after loading
+    return df 

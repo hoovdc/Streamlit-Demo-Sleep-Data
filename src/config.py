@@ -141,3 +141,7 @@ COMMON_TIMEZONES = [
 IDEAL_SLEEP_HOURS = 8
 MAX_REASONABLE_DAILY_SLEEP = 12
 CHART_HEIGHT = 400 
+
+# Feature Flags
+ENABLE_GDRIVE_SYNC = False  # Set to True to enable Google Drive sync
+ENABLE_DB = False  # Set to True to enable local SQLite DB loading 

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytz
 
 # Import configuration and data loading
-from src.config import configure_page, apply_custom_styling, APP_TITLE, DEFAULT_TIMEZONE
+from src.config import configure_page, apply_custom_styling, APP_TITLE, DEFAULT_TIMEZONE, ENABLE_GDRIVE_SYNC
 from src.data_loader import find_latest_data_file, load_data
 from src.data_processor import get_duration_analysis_data, get_quality_analysis_data, get_patterns_analysis_data, get_data_overview_info, clear_processing_cache
 from src.advanced_analytics import display_moving_variance_analysis, display_extreme_outliers, display_recording_frequency, display_day_of_week_variability, display_sleep_time_polar_plot, display_sleep_time_polar_plot_nap_view
@@ -453,6 +453,15 @@ with st.sidebar:
             del st.session_state['uploaded_file']
             st.rerun()
     
+    if ENABLE_GDRIVE_SYNC:
+        if st.button("🔄 Sync from Google Drive"):
+            try:
+                df = load_data(uploaded_file, enable_gdrive_sync=True)
+                st.success("✅ Sync completed!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Sync failed: {e}")
+
     st.markdown("---")
     st.header("⚙️ Settings")
     
