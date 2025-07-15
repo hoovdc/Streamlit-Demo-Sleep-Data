@@ -11,10 +11,19 @@ import os
 import glob
 from pathlib import Path
 import pytz
+import warnings
+# Suppress only the pandas FutureWarning triggered by Plotly when converting
+# datetime Series to NumPy arrays. This keeps the console clean while leaving
+# all other warnings visible.
+warnings.filterwarnings(
+    "ignore",
+    message=r"The behavior of DatetimeProperties\.to_pydatetime is deprecated",
+    category=FutureWarning,
+)
 
 # Import configuration and data loading
 from src.config import configure_page, apply_custom_styling, APP_TITLE, DEFAULT_TIMEZONE, ENABLE_GDRIVE_SYNC
-from src.data_loader import find_latest_data_file, load_data
+from src.data_loader import load_data, sync_from_gdrive, find_latest_data_file
 from src.data_processor import get_duration_analysis_data, get_quality_analysis_data, get_patterns_analysis_data, get_data_overview_info, clear_processing_cache
 from src.advanced_analytics import display_moving_variance_analysis, display_extreme_outliers, display_recording_frequency, display_day_of_week_variability, display_sleep_time_polar_plot, display_sleep_time_polar_plot_nap_view
 
@@ -34,9 +43,10 @@ try:
     if 'target_timezone' not in st.session_state:
         st.session_state.target_timezone = DEFAULT_TIMEZONE
     
-    df = load_data(uploaded_file)
+    df, source_description = load_data(uploaded_file)
     
     if len(df) == 0:
+        st.warning(f"No data loaded. Source description: {source_description}")
         st.stop()  # Stop execution if no data loaded
         
     # Create dashboard layout with tabs
@@ -238,117 +248,53 @@ try:
                     fig_day_counts.update_layout(margin=dict(t=40, b=40, l=40, r=40))
                     st.plotly_chart(fig_day_counts, use_container_width=True)
 
-                with st.expander("Consistency Recommendations & Scores"):
-                    st.markdown(f"""
-                    Your average bedtime consistency score is **{bedtime_std:.2f} hours** (standard deviation).
-
-                    - **Under 1 hour**: Very consistent schedule.
-                    - **1 to 1.5 hours**: Fairly consistent, but with some variability.
-                    - **Over 1.5 hours**: Inconsistent schedule, which can impact sleep quality.
-
-                    **Recommendation**: Aim to go to bed and wake up around the same time each day, even on weekends, to stabilize your body's internal clock.
-                    """)
-                
-                # 24-Hour Sleep Distribution Polar Plot
-                st.markdown("---")
-                st.markdown("### 🕰️ 24-Hour Sleep Distribution")
-                st.markdown("##### Total sleep hours by time of day (15-minute intervals)")
-                display_sleep_time_polar_plot(df)
-                
-                # Nap View - Scaled for daytime visibility
-                st.markdown("### 🌅 Nap View (10am-7pm scaled)")
-                st.markdown("##### Daytime sleep scaled for better nap visibility")
-                display_sleep_time_polar_plot_nap_view(df)
-                
-            else:
-                st.warning("Not enough data to analyze sleep patterns.")
         except Exception as e:
             st.error(f"Error analyzing sleep patterns: {str(e)}")
 
     with tab3:
         
         try:
-            # This data is required for the variance analysis
+            # Use the centralized data processor for source data
             plot_df, daily_sleep, processing_info = get_duration_analysis_data(df)
             
-            if daily_sleep is not None and len(daily_sleep) > 0:
-                # Flat layout for variance analytics
-                display_day_of_week_variability(daily_sleep)
-                
-                display_moving_variance_analysis(daily_sleep)
-
-                display_extreme_outliers(daily_sleep, plot_df)
+            # Display analyses
+            display_moving_variance_analysis(daily_sleep)
+            display_day_of_week_variability(daily_sleep)
+            
+            st.markdown("---")
+            
+            nap_view = st.checkbox("Focus on Naps/Short Sleep (<4 hours)", value=False)
+            if nap_view:
+                display_sleep_time_polar_plot_nap_view(plot_df)
             else:
-                st.warning("No sleep data available for variance analysis.")
+                display_sleep_time_polar_plot(plot_df)
+            
         except Exception as e:
-            st.error(f"Error in 'Sleep Variance' tab: {str(e)}")
+            st.error(f"Error in advanced analytics: {str(e)}")
 
     with tab4:
         
         try:
-            # Use the centralized data processor
-            plot_df, available_metrics = get_quality_analysis_data(df)
+            quality_df, quality_metrics = get_quality_analysis_data(df)
             
-            if available_metrics and len(plot_df) > 0:
+            if quality_df is not None and len(quality_df) > 0:
+                # Let user select metrics
                 selected_metrics = st.multiselect(
-                    "Select metrics to view:",
-                    available_metrics,
-                    default=available_metrics[:2]
+                    'Select sleep quality metrics to display:',
+                    options=quality_metrics,
+                    default=quality_metrics[:2]  # Default to first two
                 )
                 
-                col1, col2 = st.columns(2)
-                
-                if selected_metrics and 'From' in plot_df.columns:
-                    # Quality Metrics Over Time
-                    with col1:
-                        for metric in selected_metrics:
-                            fig = px.line(plot_df, x='From', y=metric, title=f'{metric} Over Time', labels={'From': 'Date', 'value': metric})
-                            fig.update_layout(margin=dict(t=40, b=40, l=40, r=40))
-                            st.plotly_chart(fig, use_container_width=True)
-
-                    # Quality Distribution Histograms
-                    with col2:
-                        for metric in selected_metrics:
-                            fig = px.histogram(plot_df, x=metric, nbins=20, title=f'Distribution of {metric}')
-                            fig.update_layout(margin=dict(t=40, b=40, l=40, r=40))
-                            st.plotly_chart(fig, use_container_width=True)
-
-                    # Correlation Heatmap
-                    
-                    # Ensure 'Hours' is in the dataframe for correlation
-                    if 'Hours' not in plot_df.columns:
-                        st.warning("Skipping correlation: 'Hours' column not available.")
-                    else:
-                        correlation_metrics = selected_metrics + ['Hours']
-                        if len(correlation_metrics) > 1:
-                            correlation_matrix = plot_df[correlation_metrics].corr()
-                            fig_heatmap = go.Figure(data=go.Heatmap(
-                                z=correlation_matrix.values,
-                                x=correlation_matrix.columns,
-                                y=correlation_matrix.columns,
-                                colorscale='Viridis',
-                                text=correlation_matrix.values,
-                                texttemplate="%{text:.2f}"
-                            ))
-                            fig_heatmap.update_layout(
-                                title='Correlation Between Selected Metrics and Sleep Duration',
-                                margin=dict(t=40, b=40, l=40, r=40)
-                            )
-                            st.plotly_chart(fig_heatmap, use_container_width=True)
-                        else:
-                            st.info("Select at least one metric to see correlation with sleep duration.")
-                
-                with st.expander("Correlation Interpretations & Recommendations"):
-                    st.markdown("""
-                    - **Positive Correlation** (closer to +1.0): When one metric increases, the other tends to increase. For example, more 'Deep sleep' might correlate with higher 'Snoring' if you snore more during deep sleep phases.
-                    - **Negative Correlation** (closer to -1.0): When one metric increases, the other tends to decrease. For example, higher 'Noise' levels might correlate with lower 'Deep sleep' duration.
-                    - **No Correlation** (closer to 0.0): The metrics have no clear relationship.
-                    
-                    **Recommendations**: Look for strong negative correlations between quality metrics (like 'Deep sleep') and controllable factors (like 'Noise' or 'Snoring'). Addressing these might improve sleep quality.
-                    """)
+                if selected_metrics:
+                    # Create line chart for selected metrics over time
+                    fig_quality = px.line(quality_df, x='Date', y=selected_metrics,
+                                          title='Sleep Quality Metrics Over Time',
+                                          labels={'value': 'Metric Value', 'variable': 'Metric'})
+                    st.plotly_chart(fig_quality, use_container_width=True)
+                else:
+                    st.info("Select one or more quality metrics to visualize.")
             else:
-                st.info("No sleep quality data available (e.g., Deep sleep %, Cycles, Snoring).")
-        
+                st.warning("No quality data found.")
         except Exception as e:
             st.error(f"Error analyzing sleep quality: {str(e)}")
             
@@ -420,6 +366,16 @@ except FileNotFoundError:
 
 # Sidebar for filters and settings
 with st.sidebar:
+    st.header("Controls")
+    
+    if ENABLE_GDRIVE_SYNC:
+        if st.button("🔄 Sync from Google Drive"):
+            sync_success = sync_from_gdrive()
+            if sync_success:
+                # Clear caches and rerun to reflect new data
+                st.cache_data.clear()
+                st.rerun()
+
     st.header("📁 Data Source")
     
     # Show current data source
@@ -453,14 +409,7 @@ with st.sidebar:
             del st.session_state['uploaded_file']
             st.rerun()
     
-    if ENABLE_GDRIVE_SYNC:
-        if st.button("🔄 Sync from Google Drive"):
-            try:
-                df = load_data(uploaded_file, enable_gdrive_sync=True)
-                st.success("✅ Sync completed!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Sync failed: {e}")
+    # Removed duplicate lower sync button to avoid confusion
 
     st.markdown("---")
     st.header("⚙️ Settings")

@@ -56,16 +56,15 @@ data/
 5. Rename using the convention: `YYYYMMDD_sleep-export_2025only.csv`
 6. Place in the `data/` folder of this project
 
-### Automated Google Drive Method (Planned)
-The app will eventually support:
-1. Connecting to your Google Drive Sleep as Android backup folder
-2. Automatically extracting the latest ZIP exports
-3. Filtering to 2025-only data for optimal performance
-4. Updating the dashboard with the newest data
+### Automated Google Drive Sync  
+The dashboard now includes a built-in Google Drive sync feature (optional).
 
-**Google Drive Folders:**
-- Manual backups: Use your personal folder ID (configure in `secrets/config.toml`)
-- Automated backups: Use your personal folder ID (configure in `secrets/config.toml`)
+1. Configure your credentials and folder ID in `secrets/` (see below).
+2. Start the app and click the sidebar button **🔄 Sync from Google Drive**.
+3. The latest *Sleep as Android Data.zip* is downloaded, filtered to 2025+ records, and merged into the local SQLite DB.
+4. The dashboard automatically reloads to show fresh data.
+
+**Google Drive Configuration:**  add your Drive folder ID to `secrets/config.toml` under the `[gdrive]` section.
 
 ## ✨ Features
 
@@ -103,12 +102,8 @@ The dashboard provides comprehensive sleep analysis through an organized tabbed 
 - **Multi-Timezone Support**: Handles travel and timezone changes automatically
 - **Timezone Selection**: Choose your preferred display timezone from the sidebar
 
-### 🔧 Data Management & Troubleshooting
-- **Data Validation**: Automatic detection of common CSV issues
-- **File Upload**: Manual file upload if automatic detection fails
-- **Format Guidance**: Instructions for preparing data files
-- **Error Diagnostics**: Clear error messages and solution suggestions
-- **Raw Data Inspection**: View and validate your data structure
+### Data Management & Troubleshooting
+• A single **🔄 Sync from Google Drive** button now appears at the top of the sidebar; duplicate buttons have been removed for clarity.
 
 ### 📢 Centralized Notifications
 - **Clean Interface**: All system messages, warnings, and processing updates are contained within a dedicated notifications area

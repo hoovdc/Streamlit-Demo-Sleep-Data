@@ -26,8 +26,10 @@ def get_base_sleep_data(df):
     if 'From' in base_df.columns and pd.api.types.is_datetime64_any_dtype(base_df['From']):
         base_df = base_df[base_df['From'].dt.year == TARGET_YEAR].copy()
     
-    # Filter for legitimate sleep periods (Hours > 0)
+    # Ensure Hours column is numeric and filter legitimate sleep periods
     if 'Hours' in base_df.columns:
+        # Convert to numeric, coercing errors to NaN
+        base_df['Hours'] = pd.to_numeric(base_df['Hours'], errors='coerce')
         base_df = base_df[base_df['Hours'] > 0].copy()
     
     return base_df

@@ -46,6 +46,7 @@ def insert_new_data(df, db_path=DB_PATH):
     Insert new data into DB, skipping duplicates based on Id.
     Filters for year 2025+.
     """
+    init_db(db_path)  # Ensure DB and table exist before writing
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
@@ -71,6 +72,7 @@ def load_from_db(db_path=DB_PATH):
     """
     Load all records from DB into DataFrame.
     """
+    init_db(db_path)  # Ensure DB and table exist before reading
     conn = sqlite3.connect(db_path)
     query = 'SELECT * FROM sleep_records'
     df = pd.read_sql_query(query, conn, parse_dates=["From", "To", "Sched"])
