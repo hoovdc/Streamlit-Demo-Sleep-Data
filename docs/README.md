@@ -56,16 +56,15 @@ data/
 5. Rename using the convention: `YYYYMMDD_sleep-export_2025only.csv`
 6. Place in the `data/` folder of this project
 
-### Automated Google Drive Method (Planned)
-The app will eventually support:
-1. Connecting to your Google Drive Sleep as Android backup folder
-2. Automatically extracting the latest ZIP exports
-3. Filtering to 2025-only data for optimal performance
-4. Updating the dashboard with the newest data
+### Automated Google Drive Sync  
+The dashboard now includes a built-in Google Drive sync feature (optional).
 
-**Google Drive Folders:**
-- Manual backups: [Sleep as Android folder](https://drive.google.com/drive/u/0/folders/15kBAnQDMFdSud2WRF5VwtgCzKd1Jo6gA)
-- Automated backups: [Sleep Cloud backup folder](https://drive.google.com/drive/u/0/folders/1oFWJdhD73s9wVDTVCexmj9LslWSqIKAB)
+1. Configure your credentials and folder ID in `secrets/` (see below).
+2. Start the app and click the sidebar button **🔄 Sync from Google Drive**.
+3. The latest *Sleep as Android Data.zip* is downloaded, filtered to 2025+ records, and merged into the local SQLite DB.
+4. The dashboard automatically reloads to show fresh data.
+
+**Google Drive Configuration:**  add your Drive folder ID to `secrets/config.toml` under the `[gdrive]` section.
 
 ## ✨ Features
 
@@ -103,12 +102,8 @@ The dashboard provides comprehensive sleep analysis through an organized tabbed 
 - **Multi-Timezone Support**: Handles travel and timezone changes automatically
 - **Timezone Selection**: Choose your preferred display timezone from the sidebar
 
-### 🔧 Data Management & Troubleshooting
-- **Data Validation**: Automatic detection of common CSV issues
-- **File Upload**: Manual file upload if automatic detection fails
-- **Format Guidance**: Instructions for preparing data files
-- **Error Diagnostics**: Clear error messages and solution suggestions
-- **Raw Data Inspection**: View and validate your data structure
+### Data Management & Troubleshooting
+• A single **🔄 Sync from Google Drive** button now appears at the top of the sidebar; duplicate buttons have been removed for clarity.
 
 ### 📢 Centralized Notifications
 - **Clean Interface**: All system messages, warnings, and processing updates are contained within a dedicated notifications area
@@ -217,9 +212,20 @@ For better performance:
 2. Place older/larger files in the `old/` subfolder
 3. The app will automatically select the most recent optimized file
 
+### Google Drive Setup Instructions
+To enable automated sync:
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create a new project.
+2. Enable the Google Drive API.
+3. Create OAuth 2.0 Client IDs (select 'Desktop app').
+4. Download the credentials JSON and save as `secrets/gdrive_credentials.json`.
+5. In Google Drive, find your Sleep as Android backup folder ID (from URL).
+6. Edit `secrets/config.toml` and paste the folder_id.
+7. Run the app and authorize via the browser popup on first sync.
+
 ## 📈 Planned Features
 
 1. **Automated Google Drive Integration**: Direct connection to Sleep as Android backup folders
+   - See setup instructions below for Google API credentials.
 2. **Graceful Terminal Management**: Clean shutdown controls and resource cleanup
 3. **Advanced Predictive Analytics**: Sleep quality prediction models and trend forecasting
 4. **Export & Reporting**: PDF reports and comprehensive data export options

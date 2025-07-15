@@ -8,7 +8,15 @@
 ## 📋 Planned Features
 
 ### High Priority
-1. **Graceful Terminal Management**
+1. **Google Drive Sync Integration**
+   - Modular implementation to automatically sync sleep data from Google Drive
+   - Detailed phased plan in [docs/plans/Gdrive_sync_plan.md](../plans/Gdrive_sync_plan.md)
+   - Handle ZIP files containing CSV exports
+   - Local storage in SQLite DB for incremental updates
+   - Scope: 2025+ data only
+   - Secure handling of secrets in new `secrets/` folder (excluded via .gitignore)
+
+2. **Graceful Terminal Management**
    - Implement graceful shutdown mechanism for Streamlit server
    - Add "Stop Server" button in the dashboard
    - Automatically detect when user closes browser tab
@@ -16,51 +24,51 @@
    - User invited to "Press Enter" in terminal to close app
    - Proper cleanup of resources on shutdown
 
-2. **Enhanced Data Processing**
+3. **Enhanced Data Processing**
    - Google Drive API integration for automatic file sync
    - ZIP file extraction for Sleep Cloud backups
    - Data validation and cleaning pipeline improvements
    - Historical data archiving system
 
 ### Medium Priority
-3. **Advanced Predictive Analytics**
+4. **Advanced Predictive Analytics**
    - Sleep efficiency calculations and sleep debt tracking
    - Predictive sleep quality models
    - Trend forecasting and pattern prediction
    - Weekly/monthly statistical insights with recommendations
 
-4. **User Experience Improvements**
+5. **User Experience Improvements**
    - Mobile-responsive design optimization
    - Dark/light theme toggle
    - Custom date range filtering with presets
    - Export dashboard as PDF reports
 
-5. **Sleep Goal & Achievement System**
+6. **Sleep Goal & Achievement System**
    - Personal sleep target setting and tracking
    - Achievement badges and progress monitoring
    - Sleep consistency scoring system
    - Personalized recommendations based on patterns
 
 ### Low Priority
-6. **Performance & Scale Optimizations**
+7. **Performance & Scale Optimizations**
     - Incremental data loading for large datasets
     - Background data processing
     - Memory optimization for visualization
     - Advanced caching strategy improvements
 
-7. **Data Quality & Validation Tools**
+8. **Data Quality & Validation Tools**
     - Automated data anomaly detection
     - Missing data interpolation options
     - Enhanced data consistency checks
     - Export data validation reports
 
-8. **Integration & Sharing Features**
+9. **Integration & Sharing Features**
     - Integration with other health apps (Fitbit, Apple Health)
     - Multi-user support and data sharing capabilities
     - Social features for sleep community insights
     - API endpoints for external integrations
 
-9. **UI/UX Polish**
+10. **UI/UX Polish**
     - Further reduce excess whitespace and improve spacing
     - Enhanced visual design system
     - Accessibility improvements (screen reader support, keyboard navigation)
@@ -83,7 +91,7 @@
 **📈 Progress Tracking**: 
 - ✅ **Completed**: 16 major features (moved to Backlog_done_01.md)
 - 🚧 **In Progress**: 0 items
-- 📋 **High Priority**: 2 items (Terminal Management, Data Processing)
+- 📋 **High Priority**: 3 items (GDrive Sync, Terminal Management, Data Processing)
 - 📋 **Medium Priority**: 3 items (Predictive Analytics, UX, Goals)
 - 📋 **Low Priority**: 4 items (Performance, Quality Tools, Integration, UI Polish)
 - 🐛 **Known Issues**: 3 items

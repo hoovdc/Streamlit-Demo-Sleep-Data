@@ -1,5 +1,9 @@
-streamlit>=1.28.0
-pandas>=2.1.0
-plotly>=5.15.0
-numpy>=1.26.0
-pytz>=2023.3 
+streamlit>=1.28.0,<2.0
+pandas>=2.2.2,<3.0
+plotly>=5.15.0,<6.0
+numpy>=1.26.4,<2.0
+pytz>=2023.3,<2024
+google-api-python-client>=2.90.0,<3.0
+google-auth-httplib2>=0.2.0,<1.0
+google-auth-oauthlib>=1.2.0,<2.0
+toml>=0.10.2,<1.0 
